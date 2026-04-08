@@ -13,7 +13,7 @@ export default {
       "Access-Control-Allow-Methods": "GET, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=300"
+      "Cache-Control": "no-store"
     };
 
     if (request.method === "OPTIONS") {
@@ -46,13 +46,12 @@ export default {
         JSON.stringify({
           ok: true,
           source: rssUrl,
+          status: rssRes.status,
           count: items.length,
-          items
+          items,
+          debugSample: xml.slice(0, 400)
         }),
-        {
-          status: 200,
-          headers
-        }
+        { status: 200, headers }
       );
     } catch (error) {
       return new Response(
@@ -60,10 +59,7 @@ export default {
           ok: false,
           error: error.message
         }),
-        {
-          status: 500,
-          headers
-        }
+        { status: 500, headers }
       );
     }
   }
