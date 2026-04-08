@@ -79,14 +79,20 @@ function stripTags(str = "") {
 }
 
 function getTagValue(block, tagName) {
-  const cdataMatch = block.match(
-    new RegExp(`<${tagName}><!\$begin:math:display$CDATA\\\\\[\(\[\\\\s\\\\S\]\*\?\)\\$end:math:display$\\]><\\/${tagName}>`, "i")
+  const cdataRegex = new RegExp(
+    "<" + tagName + "><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/" + tagName + ">",
+    "i"
   );
+
+  const normalRegex = new RegExp(
+    "<" + tagName + ">([\\s\\S]*?)<\\/" + tagName + ">",
+    "i"
+  );
+
+  const cdataMatch = block.match(cdataRegex);
   if (cdataMatch) return cdataMatch[1].trim();
 
-  const normalMatch = block.match(
-    new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, "i")
-  );
+  const normalMatch = block.match(normalRegex);
   if (normalMatch) return normalMatch[1].trim();
 
   return "";
