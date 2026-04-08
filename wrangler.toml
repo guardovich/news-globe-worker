@@ -1,3 +1,3 @@
-name = "news-globe-api"
+name = "news-globe-worker"
 main = "worker.js"
 compatibility_date = "2026-04-08"
