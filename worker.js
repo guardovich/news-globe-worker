@@ -95,19 +95,22 @@ function getTagValue(block, tagName) {
 function parseRssItems(xml = "") {
   const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map((m) => m[1]);
 
-  return itemBlocks.slice(0, 20).map((block) => {
-    const title = stripTags(getTagValue(block, "title"));
-    const link = stripTags(getTagValue(block, "link"));
-    const pubDate = stripTags(getTagValue(block, "pubDate"));
-    const description = stripTags(getTagValue(block, "description"));
-    const source = stripTags(getTagValue(block, "source"));
+  return itemBlocks
+    .slice(0, 20)
+    .map((block) => {
+      const title = stripTags(getTagValue(block, "title"));
+      const link = stripTags(getTagValue(block, "link"));
+      const pubDate = stripTags(getTagValue(block, "pubDate"));
+      const description = stripTags(getTagValue(block, "description"));
+      const source = stripTags(getTagValue(block, "source"));
 
-    return {
-      title: title || "Sin título",
-      link,
-      pubDate,
-      source: source || "Google News",
-      summary: description.slice(0, 240)
-    };
-  }).filter(item => item.link && item.title);
+      return {
+        title: title || "Sin título",
+        link,
+        pubDate,
+        source: source || "Google News",
+        summary: description.slice(0, 240)
+      };
+    })
+    .filter((item) => item.link && item.title);
 }
