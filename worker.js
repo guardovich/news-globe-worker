@@ -35,7 +35,7 @@ export default {
     try {
       const rssRes = await fetch(rssUrl, {
         headers: {
-          "User-Agent": "news-globe-worker/1.0"
+          "User-Agent": "Mozilla/5.0 news-globe-worker"
         }
       });
 
@@ -45,11 +45,11 @@ export default {
       return new Response(
         JSON.stringify({
           ok: true,
-          source: rssUrl,
           status: rssRes.status,
+          source: rssUrl,
           count: items.length,
           items,
-          debugSample: xml.slice(0, 400)
+          xmlPreview: xml.slice(0, 500)
         }),
         { status: 200, headers }
       );
@@ -75,26 +75,27 @@ function decodeXml(str = "") {
 }
 
 function stripTags(str = "") {
-  return decodeXml(str).replace(/<[^>]*>/g, "").trim();
+  return decodeXml(str).replace(/<[^>]+>/g, "").trim();
 }
 
 function getTagValue(block, tagName) {
-  const cdataRegex = new RegExp(`<${tagName}><!\$begin:math:display$CDATA\\\\\[\(\[\\\\s\\\\S\]\*\?\)\\$end:math:display$\\]><\\/${tagName}>`, "i");
-  const normalRegex = new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, "i");
-
-  const cdataMatch = block.match(cdataRegex);
+  const cdataMatch = block.match(
+    new RegExp(`<${tagName}><!\$begin:math:display$CDATA\\\\\[\(\[\\\\s\\\\S\]\*\?\)\\$end:math:display$\\]><\\/${tagName}>`, "i")
+  );
   if (cdataMatch) return cdataMatch[1].trim();
 
-  const normalMatch = block.match(normalRegex);
+  const normalMatch = block.match(
+    new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, "i")
+  );
   if (normalMatch) return normalMatch[1].trim();
 
   return "";
 }
 
 function parseRssItems(xml = "") {
-  const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map(m => m[1]);
+  const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].map((m) => m[1]);
 
-  return itemBlocks.slice(0, 20).map(block => {
+  return itemBlocks.slice(0, 20).map((block) => {
     const title = stripTags(getTagValue(block, "title"));
     const link = stripTags(getTagValue(block, "link"));
     const pubDate = stripTags(getTagValue(block, "pubDate"));
@@ -108,5 +109,5 @@ function parseRssItems(xml = "") {
       source: source || "Google News",
       summary: description.slice(0, 240)
     };
-  });
+  }).filter(item => item.link && item.title);
 }
