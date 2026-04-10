@@ -1,3 +1,5 @@
+import { FEEDS_DB, getFeedsByCountry, getTopicKeywords } from "./feeds.js";
+
 import feedsData from "./feeds.json";
 
 const DEFAULT_HEADERS = {
