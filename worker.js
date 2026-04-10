@@ -1,6 +1,8 @@
-import { FEEDS_DB, getFeedsByCountry, getTopicKeywords } from "./feeds.js";
-
-import feedsData from "./feeds.json";
+import {
+  FEEDS_DB,
+  getFeedsByCountry,
+  getTopicKeywords
+} from "./feeds.js";
 
 const DEFAULT_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +26,7 @@ export default {
         return json({
           ok: true,
           service: "geonews-monitor-worker",
-          version: 1
+          version: 2
         });
       }
 
@@ -50,8 +52,6 @@ export default {
         return json({ ok: true, ...data });
       }
 
-      // Compatibilidad con tu frontend actual:
-      // /?q=IA&place=España&hl=es-ES&gl=ES&ceid=ES:es
       const q = (url.searchParams.get("q") || "").trim();
       const place = (url.searchParams.get("place") || "").trim();
       const hl = url.searchParams.get("hl") || "es-ES";
@@ -60,11 +60,12 @@ export default {
 
       const data = await getNewsCompat({ q, place, hl, gl, ceid });
       return json({ ok: true, ...data });
+
     } catch (error) {
       return json(
         {
           ok: false,
-          error: error instanceof Error ? error.message : "Unknown error"
+          error: error.message || "Unknown error"
         },
         500
       );
@@ -85,414 +86,193 @@ function json(data, status = 200) {
 
 function normalizeKey(value = "") {
   return value
-    .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function decodeXml(str = "") {
-  return String(str)
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&amp;", "&")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#39;", "'")
-    .replaceAll("&apos;", "'");
+function normalizeText(value = "") {
+  return normalizeKey(value);
 }
 
 function stripTags(str = "") {
-  return decodeXml(str)
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return str.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function getTagValue(block, tagName) {
-  const cdataRegex = new RegExp(
-    `<${tagName}[^>]*><!\$begin:math:display$CDATA\\\\\[\(\[\\\\s\\\\S\]\*\?\)\\$end:math:display$\\]><\\/${tagName}>`,
-    "i"
-  );
-
-  const normalRegex = new RegExp(
-    `<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`,
-    "i"
-  );
-
-  const cdataMatch = block.match(cdataRegex);
-  if (cdataMatch) return cdataMatch[1].trim();
-
-  const normalMatch = block.match(normalRegex);
-  if (normalMatch) return normalMatch[1].trim();
-
-  return "";
-}
+/* =========================
+   RSS PARSER
+========================= */
 
 function parseRssItems(xml = "", fallbackSource = "RSS") {
-  const itemBlocks = [...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)].map((m) => m[1]);
+  const items = [...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)];
 
-  return itemBlocks
-    .slice(0, 50)
-    .map((block) => {
-      const title = stripTags(getTagValue(block, "title"));
-      const link = stripTags(getTagValue(block, "link"));
-      const pubDate = stripTags(getTagValue(block, "pubDate"));
-      const description = stripTags(getTagValue(block, "description"));
-      const source = stripTags(getTagValue(block, "source"));
+  return items.map((m) => {
+    const block = m[1];
 
-      return {
-        title: title || "Sin título",
-        link,
-        pubDate,
-        source: source || fallbackSource,
-        summary: description.slice(0, 300)
-      };
-    })
-    .filter((item) => item.link && item.title);
+    const get = (tag) => {
+      const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+      return match ? stripTags(match[1]) : "";
+    };
+
+    return {
+      title: get("title") || "Sin título",
+      link: get("link"),
+      pubDate: get("pubDate"),
+      source: get("source") || fallbackSource,
+      summary: get("description").slice(0, 300)
+    };
+  }).filter(i => i.link && i.title);
+}
+
+/* =========================
+   FEEDS SYSTEM (NUEVO)
+========================= */
+
+function topicMatches(item, keywords = []) {
+  if (!keywords.length) return true;
+
+  const text = normalizeText(`${item.title} ${item.summary}`);
+
+  return keywords.some((kw) =>
+    text.includes(normalizeText(kw))
+  );
 }
 
 function dedupeItems(items = []) {
   const seen = new Set();
-  const clean = [];
 
-  for (const item of items) {
-    const key = normalizeKey(item.link || item.title);
-    if (!key || seen.has(key)) continue;
+  return items.filter((item) => {
+    const key = item.link || item.title;
+    if (seen.has(key)) return false;
     seen.add(key);
-    clean.push(item);
-  }
-
-  return clean;
+    return true;
+  });
 }
 
-function expandTopicTerms(query = "") {
-  const normalized = normalizeKey(query);
-  const topics = feedsData?.topics || {};
+async function fetchSingleFeed(feed) {
+  try {
+    const res = await fetch(feed.url, {
+      headers: { "User-Agent": "Mozilla/5.0 rss-worker" }
+    });
 
-  if (topics[normalized]) return topics[normalized];
+    if (!res.ok) return [];
 
-  return query
-    .split(/\s+/)
-    .map((v) => v.trim())
-    .filter(Boolean);
+    const xml = await res.text();
+    const items = parseRssItems(xml, feed.name);
+
+    return items.map((item) => ({
+      ...item,
+      source: feed.name,
+      lang: feed.lang || "en"
+    }));
+
+  } catch {
+    return [];
+  }
 }
 
-function matchesQuery(item, query = "") {
-  if (!query) return true;
+async function fetchFeedsByCountry(place, query = "") {
+  const feeds = getFeedsByCountry(place);
 
-  const haystack = `${item.title || ""} ${item.summary || ""}`.toLowerCase();
-  const terms = expandTopicTerms(query);
-
-  return terms.some((term) => haystack.includes(term.toLowerCase()));
-}
-
-function scoreItems(items = [], query = "", countryLabel = "") {
-  const terms = expandTopicTerms(query);
-  const countryLower = (countryLabel || "").toLowerCase();
-
-  return items
-    .map((item) => {
-      const title = (item.title || "").toLowerCase();
-      const body = `${item.title || ""} ${item.summary || ""}`.toLowerCase();
-
-      let relevance = 0;
-
-      for (const term of terms) {
-        const t = term.toLowerCase();
-        if (body.includes(t)) relevance += 10;
-        if (title.includes(t)) relevance += 18;
-      }
-
-      if (countryLower && body.includes(countryLower)) relevance += 4;
-      relevance += Math.round((item.sourceWeight || 1) * 10);
-
-      return {
-        ...item,
-        relevance
-      };
-    })
-    .sort((a, b) => b.relevance - a.relevance);
-}
-
-function resolveCountry(inputKey) {
-  const countries = feedsData?.countries || {};
-
-  for (const [key, value] of Object.entries(countries)) {
-    if (normalizeKey(key) === inputKey) {
-      return { key, ...value };
-    }
-
-    if ((value.aliases || []).map(normalizeKey).includes(inputKey)) {
-      return { key, ...value };
-    }
+  if (!feeds.length) {
+    return { ok: false, items: [] };
   }
 
-  return null;
-}
+  const keywords = getTopicKeywords(query);
 
-function buildGoogleRssUrl({ q = "", place = "", hl = "es-ES", gl = "ES", ceid = "ES:es" }) {
-  if (q && place) {
-    return `https://news.google.com/rss/search?q=${encodeURIComponent(`${q} ${place}`)}&hl=${encodeURIComponent(hl)}&gl=${encodeURIComponent(gl)}&ceid=${encodeURIComponent(ceid)}`;
-  }
+  const results = await Promise.all(
+    feeds.map((f) => fetchSingleFeed(f))
+  );
 
-  if (place) {
-    return `https://news.google.com/rss/search?q=${encodeURIComponent(place)}&hl=${encodeURIComponent(hl)}&gl=${encodeURIComponent(gl)}&ceid=${encodeURIComponent(ceid)}`;
-  }
+  const merged = results.flat();
+  const filtered = merged.filter((i) => topicMatches(i, keywords));
+  const clean = dedupeItems(filtered).slice(0, 30);
 
-  if (q) {
-    return `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${encodeURIComponent(hl)}&gl=${encodeURIComponent(gl)}&ceid=${encodeURIComponent(ceid)}`;
-  }
-
-  return `https://news.google.com/rss?hl=${encodeURIComponent(hl)}&gl=${encodeURIComponent(gl)}&ceid=${encodeURIComponent(ceid)}`;
+  return { ok: true, items: clean };
 }
 
 /* =========================
-   FETCH RSS
+   GOOGLE FALLBACK
 ========================= */
 
-async function fetchText(url) {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 geonews-monitor-worker"
-    }
-  });
+async function fetchGoogle({ q, place, hl, gl, ceid }) {
+  let url = "";
 
-  const text = await res.text();
+  if (q && place) {
+    url = `https://news.google.com/rss/search?q=${encodeURIComponent(q + " " + place)}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
+  } else if (place) {
+    url = `https://news.google.com/rss/search?q=${place}&hl=${hl}&gl=${gl}&ceid=${ceid}`;
+  } else {
+    url = `https://news.google.com/rss?q=${q}`;
+  }
+
+  const res = await fetch(url);
+  const xml = await res.text();
+  const items = parseRssItems(xml, "Google News");
 
   return {
     status: res.status,
-    text
-  };
-}
-
-async function fetchFeed(feed, query = "", limit = 12) {
-  const { status, text } = await fetchText(feed.url);
-
-  const items = parseRssItems(text, feed.name)
-    .filter((item) => matchesQuery(item, query))
-    .slice(0, limit)
-    .map((item) => ({
-      ...item,
-      sourceWeight: feed.weight || 1
-    }));
-
-  return {
-    status,
-    source: feed.url,
+    source: url,
     items
   };
 }
 
-async function fetchGoogleCompat(params) {
-  const rssUrl = buildGoogleRssUrl(params);
-  const { status, text } = await fetchText(rssUrl);
-  const items = parseRssItems(text, "Google News");
-
-  return {
-    status,
-    source: rssUrl,
-    count: items.length,
-    items,
-    xmlPreview: text.slice(0, 500)
-  };
-}
-
 /* =========================
-   ENDPOINT COMPAT FRONT ACTUAL
+   CORE LOGIC
 ========================= */
 
 async function getNewsCompat({ q, place, hl, gl, ceid }) {
-  const countryKey = normalizeKey(place || "");
-  const country = resolveCountry(countryKey);
+  // 1️⃣ intentar feeds propios
+  const feedsResult = await fetchFeedsByCountry(place, q);
 
-  // Si no hay feeds definidos para el país, usa Google News RSS como hasta ahora
-  if (!country || !country.feeds || !country.feeds.length) {
-    return await fetchGoogleCompat({ q, place, hl, gl, ceid });
+  if (feedsResult.ok && feedsResult.items.length) {
+    return {
+      mode: "feeds",
+      count: feedsResult.items.length,
+      items: feedsResult.items
+    };
   }
 
-  const maxFeedsPerRequest = feedsData?.defaults?.maxFeedsPerRequest || 4;
-  const maxItemsPerFeed = feedsData?.defaults?.maxItemsPerFeed || 12;
-
-  const selectedFeeds = country.feeds.slice(0, maxFeedsPerRequest);
-
-  const settled = await Promise.allSettled(
-    selectedFeeds.map((feed) => fetchFeed(feed, q, maxItemsPerFeed))
-  );
-
-  const rawItems = settled
-    .filter((r) => r.status === "fulfilled")
-    .flatMap((r) => r.value.items);
-
-  const deduped = dedupeItems(rawItems);
-  const scored = scoreItems(deduped, q, country.label || place);
-
-  // fallback a Google si no sale nada
-  if (!scored.length) {
-    return await fetchGoogleCompat({ q, place, hl, gl, ceid });
-  }
-
-  return {
-    status: 200,
-    source: "country-feeds",
-    country: country.label || place,
-    count: scored.length,
-    items: scored.slice(0, 20),
-    xmlPreview: ""
-  };
+  // 2️⃣ fallback google
+  return await fetchGoogle({ q, place, hl, gl, ceid });
 }
 
 /* =========================
-   ALERTAS INTERNACIONALES
+   ALERTS / BRIEFING
 ========================= */
 
 async function getAlerts() {
-  const esFeeds = feedsData?.alerts?.international_es || [];
-  const enFeeds = feedsData?.alerts?.international_en || [];
-
-  const [esSettled, enSettled] = await Promise.all([
-    Promise.allSettled(esFeeds.slice(0, 4).map((feed) => fetchFeed(feed, "", 8))),
-    Promise.allSettled(enFeeds.slice(0, 4).map((feed) => fetchFeed(feed, "", 8)))
-  ]);
-
-  const alerts_es = dedupeItems(
-    esSettled
-      .filter((r) => r.status === "fulfilled")
-      .flatMap((r) => r.value.items)
-  ).slice(0, 10);
-
-  const alerts_en = dedupeItems(
-    enSettled
-      .filter((r) => r.status === "fulfilled")
-      .flatMap((r) => r.value.items)
-  ).slice(0, 10);
-
   return {
-    alerts_es,
-    alerts_en
+    alerts_es: [],
+    alerts_en: []
   };
 }
-
-/* =========================
-   SCORING PAÍS
-========================= */
-
-function buildCountryScoring(items = []) {
-  const text = items
-    .map((i) => `${i.title || ""} ${i.summary || ""}`)
-    .join(" ")
-    .toLowerCase();
-
-  const rules = {
-    tension: ["war", "guerra", "conflict", "conflicto", "attack", "ataque", "crisis", "missile", "sanction", "sancion", "sanción"],
-    economy: ["economy", "economia", "economía", "market", "mercado", "inflation", "inflacion", "inflación", "bank", "banco", "oil", "gas"],
-    social: ["protest", "protesta", "migration", "migracion", "migración", "health", "sanidad", "education", "educacion", "educación"],
-    security: ["security", "seguridad", "defense", "defensa", "army", "ejercito", "ejército", "nato", "otan", "cyber"],
-    technology: ["ai", "ia", "chip", "software", "data", "digital", "ciberseguridad", "cybersecurity"]
-  };
-
-  const scoreBucket = (words) =>
-    Math.min(
-      100,
-      words.reduce((acc, word) => acc + (text.includes(word) ? 18 : 0), 0)
-    );
-
-  const tension = scoreBucket(rules.tension);
-  const economy = scoreBucket(rules.economy);
-  const social = scoreBucket(rules.social);
-  const security = scoreBucket(rules.security);
-  const technology = scoreBucket(rules.technology);
-
-  return {
-    tension,
-    economy,
-    social,
-    security,
-    technology,
-    defconLike:
-      tension >= 80 ? "RED" :
-      tension >= 60 ? "ORANGE" :
-      tension >= 40 ? "YELLOW" :
-      tension >= 20 ? "BLUE" :
-      "GREEN"
-  };
-}
-
-/* =========================
-   BRIEFING
-========================= */
 
 async function getBriefing(topic, countryKeys) {
-  if (!topic) throw new Error("Missing topic");
-  if (!countryKeys.length) throw new Error("Missing countries");
-
   const groups = [];
 
   for (const key of countryKeys) {
-    const country = resolveCountry(key);
-    if (!country) continue;
-
     const news = await getNewsCompat({
       q: topic,
-      place: country.label || key,
-      hl: country.lang || "en",
-      gl: "",
-      ceid: ""
+      place: key
     });
 
-    const items = news.items || [];
-    const scoring = buildCountryScoring(items);
-
     groups.push({
-      country: country.label || key,
-      count: items.length,
-      items: items.slice(0, 5),
-      scoring
+      country: key,
+      count: news.items.length,
+      items: news.items.slice(0, 5)
     });
   }
 
-  const summary = buildBriefingSummary(topic, groups);
-
   return {
     topic,
-    countries: groups.map((g) => g.country),
-    groups,
-    summary
+    groups
   };
 }
 
 async function getRandomBriefing(topic) {
-  if (!topic) throw new Error("Missing topic");
+  const countries = Object.keys(FEEDS_DB.countries || {});
+  const random = countries.sort(() => 0.5 - Math.random()).slice(0, 3);
 
-  const keys = Object.keys(feedsData?.countries || {});
-  const selected = shuffle(keys).slice(0, 3);
-
-  const briefing = await getBriefing(topic, selected);
-
-  return {
-    random: true,
-    ...briefing
-  };
-}
-
-function buildBriefingSummary(topic, groups) {
-  const total = groups.reduce((acc, g) => acc + (g.count || 0), 0);
-  const hottest = [...groups].sort(
-    (a, b) => (b.scoring?.tension || 0) - (a.scoring?.tension || 0)
-  )[0];
-
-  return {
-    executiveSummary: `Briefing generado sobre "${topic}" con ${groups.length} países y ${total} titulares agregados.`,
-    hottestCountry: hottest?.country || null,
-    highestTension: hottest?.scoring?.tension || 0
-  };
-}
-
-function shuffle(arr) {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
+  return getBriefing(topic, random);
 }
