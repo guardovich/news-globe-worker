@@ -48,6 +48,12 @@ export default {
         return json({ ok: true, ...data });
       }
 
+      /* ── Datos de mercado (Yahoo Finance) ─── */
+      if (path === "/markets") {
+        const data = await getMarkets();
+        return json({ ok: true, markets: data });
+      }
+
       /* ── List available countries ─────────── */
       if (path === "/countries") {
         const countries = Object.entries(FEEDS_DB.countries || {}).map(
@@ -132,8 +138,22 @@ function normalizeText(value = "") {
   return value
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .trim();
+}
+
+/* Matching con word boundary para evitar falsos positivos ("ia" en "noticia") */
+function matchKeyword(text, kw) {
+  if (kw.length <= 2 || kw === "ai") {
+    // Keywords muy cortas: exigir que sean palabra completa
+    return new RegExp("(?:^|[\\s,;:.!?\\-\\/\\(])" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?:[\\s,;:.!?\\-\\/\\)]|$)", "i").test(text);
+  }
+  if (kw.includes(" ")) return text.includes(kw); // frases: includes directo
+  try {
+    return new RegExp("(?<![a-záéíóúüñ])" + kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-záéíóúüñ])", "i").test(text);
+  } catch {
+    return text.includes(kw);
+  }
 }
 
 function stripTags(str = "") {
@@ -222,12 +242,14 @@ async function fetchSingleFeed(feed) {
 function topicMatches(item, keywords = []) {
   if (!keywords.length) return true;
   const text = normalizeText(`${item.title} ${item.summary}`);
-  // Match full keyword OR any individual word from multi-word keywords
   return keywords.some((kw) => {
     const normKw = normalizeText(kw);
-    if (text.includes(normKw)) return true;
-    // Also try splitting multi-word keywords
-    return normKw.split(/\s+/).filter(w => w.length > 3).some(w => text.includes(w));
+    if (matchKeyword(text, normKw)) return true;
+    // Para keywords multi-palabra, probar también cada palabra larga
+    if (normKw.includes(" ")) {
+      return normKw.split(/\s+/).filter(w => w.length > 4).some(w => matchKeyword(text, w));
+    }
+    return false;
   });
 }
 
@@ -371,6 +393,53 @@ async function getRandomBriefing(topic, count = 3, env = null) {
 }
 
 /* =========================
+   MERCADOS — YAHOO FINANCE
+========================= */
+
+const MARKET_SYMBOLS = [
+  { label: "IBEX",   symbol: "%5EIBEX",  type: "index"    },
+  { label: "S&P",    symbol: "%5EGSPC",  type: "index"    },
+  { label: "NASDAQ", symbol: "%5EIXIC",  type: "index"    },
+  { label: "BRENT",  symbol: "BZ%3DF",   type: "commodity"},
+  { label: "ORO",    symbol: "GC%3DF",   type: "commodity"},
+  { label: "BTC",    symbol: "BTC-USD",  type: "crypto"   },
+  { label: "EUR/USD",symbol: "EURUSD%3DX",type: "fx"      }
+];
+
+async function fetchSymbol(item) {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${item.symbol}?interval=1d&range=1d`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (!meta) throw new Error("No meta");
+
+    const price  = meta.regularMarketPrice;
+    const prev   = meta.previousClose || meta.chartPreviousClose;
+    const change = prev ? ((price - prev) / prev * 100) : 0;
+    const sign   = change >= 0 ? "+" : "";
+
+    return {
+      label:  item.label,
+      value:  price < 10 ? price.toFixed(4) : price < 1000 ? price.toFixed(2) : Math.round(price).toLocaleString("es-ES"),
+      change: `${sign}${change.toFixed(2)}%`,
+      type:   item.type
+    };
+  } catch {
+    return { label: item.label, value: "—", change: "—", type: item.type };
+  }
+}
+
+async function getMarkets() {
+  const results = await Promise.all(MARKET_SYMBOLS.map(fetchSymbol));
+  return results;
+}
+
+/* =========================
    D1 — STATUS
 ========================= */
 
@@ -459,6 +528,9 @@ async function queryD1ByCountry(env, countryKey, query = "") {
       if (keywords.some((kw) => norm(kw) === normalizedQ)) { matchedTopic = key; break; }
     }
   }
+  // Mapeo de alias comunes → clave de topic
+  const topicAliasMap = { "ia": "ia", "ai": "ia", "inteligencia artificial": "ia", "artificial intelligence": "ia" };
+  if (!matchedTopic && topicAliasMap[normalizedQ]) matchedTopic = topicAliasMap[normalizedQ];
 
   let result;
   if (matchedTopic) {
@@ -527,7 +599,7 @@ function detectTopics(item) {
   const tags = [];
   const text = normalizeText(`${item.title} ${item.summary}`);
   for (const [topic, keywords] of Object.entries(FEEDS_DB.topics || {})) {
-    if (keywords.some((kw) => text.includes(normalizeText(kw)))) {
+    if (keywords.some((kw) => matchKeyword(text, normalizeText(kw)))) {
       tags.push(topic);
     }
   }

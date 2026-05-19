@@ -352,14 +352,30 @@ let _globeDragging  = false;
 let _globeDragStart = null;
 let _globeDragRot   = null;
 
-const mockMarkets = [
-  { label: "IBEX", value: "11,284", change: "+0.42%" },
-  { label: "S&P", value: "5,918", change: "-0.18%" },
-  { label: "NASDAQ", value: "18,442", change: "+0.63%" },
-  { label: "BRENT", value: "82.31", change: "+1.12%" },
-  { label: "ORO", value: "2,348", change: "+0.27%" },
-  { label: "BTC", value: "68,420", change: "-0.54%" }
+// Caché local de datos de mercado (se rellena desde /markets)
+let _marketData = [
+  { label: "IBEX",   value: "—", change: "—" },
+  { label: "S&P",    value: "—", change: "—" },
+  { label: "NASDAQ", value: "—", change: "—" },
+  { label: "BRENT",  value: "—", change: "—" },
+  { label: "ORO",    value: "—", change: "—" },
+  { label: "BTC",    value: "—", change: "—" },
+  { label: "EUR/USD",value: "—", change: "—" }
 ];
+
+async function fetchMarkets() {
+  try {
+    const res = await fetch(`${WORKER_URL}/markets`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.ok && Array.isArray(data.markets)) {
+      _marketData = data.markets;
+      renderMarketBoard();
+    }
+  } catch (e) {
+    console.warn("[markets] fetch error:", e);
+  }
+}
 
 const tensionKeywords = [
   // Conflicto armado
@@ -906,7 +922,7 @@ function updateWorldClocks() {
 function renderMarketBoard() {
   if (!marketBoardEl) return;
 
-  marketBoardEl.innerHTML = mockMarkets
+  marketBoardEl.innerHTML = _marketData
     .map((item) => {
       const isNegative = item.change.startsWith("-");
       const color = isNegative ? "#ff8e8e" : "#86efac";
@@ -2257,3 +2273,7 @@ function initDashboard() {
 
 initDashboard();
 setInterval(updateWorldClocks, 1000);
+
+// Datos de mercado: carga inicial + refresco cada 60 segundos
+fetchMarkets();
+setInterval(fetchMarkets, 60_000);
