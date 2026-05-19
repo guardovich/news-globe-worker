@@ -444,35 +444,41 @@ const negativeKeywords = [
 ];
 
 const positiveKeywords = [
-  // Diplomacia y paz
-  "acuerdo", "agreement", "deal", "tratado", "treaty", "pacto", "pact",
-  "ceasefire", "alto el fuego", "tregua", "truce", "paz", "peace",
-  "cooperacion", "cooperación", "cooperation", "alianza", "alliance",
-  "cumbre", "summit", "dialogo", "diálogo", "dialogue", "mediación",
-  "normalización diplomática", "reunificación", "rapprochement",
-  "reconciliacion", "reconciliation", "acercamiento",
-  // Economía positiva
-  "crece", "crecimiento", "growth", "economic expansion", "expande",
-  "máximo histórico", "all-time high", "boom",
-  "inversion", "inversión", "investment", "financiacion", "funding",
-  "empleo", "employment", "jobs", "trabajo", "pleno empleo",
-  "exportaciones", "exports", "surplus", "superávit", "beneficios",
-  "rebote", "rebound", "recuperación económica", "prosperidad",
-  "acuerdo comercial", "trade deal", "libre comercio", "free trade",
-  // Recuperación y estabilidad
-  "mejora", "improvement", "recovery", "recuperacion", "recuperación",
-  "alivio", "relief", "estabilidad", "stability", "normalización",
-  "reduccion", "reducción", "reduction", "bajada", "decrease", "desescalada",
-  "fin del conflicto", "end of conflict", "cese de hostilidades",
-  // Avances científicos, humanitarios y sociales
-  "avance", "breakthrough", "progreso", "progress", "innovacion", "innovation",
-  "exito", "éxito", "success", "logro", "achievement", "hito",
-  "resolución", "resolution", "solución", "solution", "resuelto",
-  "ayuda humanitaria", "humanitarian aid", "rescate", "rescue",
-  "vacuna", "vaccine", "cura", "cure", "avance médico", "medical breakthrough",
-  "solidaridad", "solidarity", "acuerdo histórico", "historic deal",
+  // ── Diplomacia y paz (frases específicas) ──────────────────────────────
+  "acuerdo de paz", "peace agreement", "peace deal", "peace talks",
+  "alto el fuego", "ceasefire", "alto al fuego", "tregua firmada",
+  "tratado firmado", "treaty signed", "acuerdo firmado", "deal signed",
+  "fin de la guerra", "end of war", "fin del conflicto", "end of conflict",
+  "cese de hostilidades", "hostilities ended",
+  "diálogo de paz", "peace dialogue", "negociaciones de paz",
+  "normalización diplomática", "diplomatic normalization",
+  "reunificación", "reconciliación", "reconciliation",
+  "liberación de rehenes", "hostages freed", "presos liberados",
+  "retirada de tropas", "troops withdrawal", "desmilitarización",
+  "acuerdo histórico", "historic agreement", "historic deal",
+  // ── Economía positiva (frases, no palabras sueltas) ────────────────────
+  "crecimiento económico", "economic growth", "economic expansion",
+  "máximo histórico", "all-time high", "record de empleo",
+  "inversión extranjera", "foreign investment", "atrae inversión",
+  "pleno empleo", "full employment", "creación de empleo", "job creation",
+  "superávit presupuestario", "budget surplus",
+  "rebote económico", "economic rebound", "recuperación económica",
+  "acuerdo comercial", "trade agreement", "trade deal",
+  "libre comercio", "free trade", "exportaciones récord",
+  "prosperidad", "prosperity", "auge económico",
+  // ── Estabilidad y desescalada ──────────────────────────────────────────
+  "desescalada", "de-escalation", "tensión reducida", "tension reduced",
+  "estabilidad política", "political stability",
   "elecciones libres", "free elections", "democracia restaurada",
-  "liberación", "liberation", "libre", "freedom", "derechos garantizados"
+  "reformas aprobadas", "reforms approved",
+  // ── Humanitario y científico (frases) ─────────────────────────────────
+  "ayuda humanitaria", "humanitarian aid", "corredor humanitario",
+  "vacuna aprobada", "vaccine approved", "cura encontrada",
+  "avance médico", "medical breakthrough", "avance científico",
+  "rescate exitoso", "successful rescue",
+  "solidaridad internacional", "international solidarity",
+  "derechos garantizados", "rights guaranteed",
+  "libertad de prensa", "press freedom"
 ];
 
 /* =========================
