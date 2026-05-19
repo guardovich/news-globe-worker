@@ -378,116 +378,303 @@ async function fetchMarkets() {
 }
 
 const tensionKeywords = [
-  // Conflicto armado
-  "guerra", "war", "conflict", "conflicto", "ataque", "attack",
-  "bombardeo", "bombing", "airstrike", "misil", "missile", "drone", "dron",
-  "explosion", "explosión", "detonation", "detonacion",
-  "invasion", "invasión", "offensive", "ofensiva", "assault",
-  "casualty", "casualties", "muertos", "heridos", "bajas",
-  "soldier", "soldado", "troops", "tropas",
-  // Diplomacia de tensión
-  "sancion", "sanción", "sanciones", "sanctions", "embargo",
-  "escalada", "escalation", "ruptura", "breakdown",
-  "ultimatum", "ultimátum", "veto", "standoff", "confrontacion",
-  "expulsion", "expulsión", "ruptura diplomática",
-  // Seguridad y amenazas
-  "terrorismo", "terrorism", "terrorist", "terrorista",
-  "cyberattack", "ciberataque", "hack", "breach", "malware",
-  "espionaje", "espionage", "spy", "espía", "sabotage", "sabotaje",
-  "threat", "amenaza", "riesgo", "risk", "alert", "alerta", "emergency",
-  // Militar
-  "military", "militar", "nato", "otan", "ejercito", "ejército",
-  "navy", "armada", "fuerza aerea", "air force",
-  "nuclear", "armas", "weapons", "arsenal", "arms race",
-  "despliegue", "deploy", "movilización", "mobilization",
-  // Inestabilidad política
-  "bloqueo", "blockade", "frontera", "border", "incidente", "incident",
-  "provocacion", "provocation", "represalia", "retaliation",
-  "coup", "golpe", "golpe de estado", "revolt", "revuelta",
-  "protest", "protesta", "unrest", "disturbio", "riot",
-  "secession", "secesion", "independencia forzada"
+  // ── Conflicto armado (ES) ──────────────────────────────────────────────
+  "guerra", "conflicto armado", "bombardeo", "invasion", "invasión",
+  "ofensiva", "asalto", "emboscada", "masacre", "genocidio",
+  "crimen de guerra", "atrocidad", "asedio", "sitiado",
+  "bajas civiles", "víctimas mortales", "fuego cruzado",
+  "francotirador", "ejecución sumaria", "desaparición forzada",
+  "operación militar", "ataque aéreo", "misil", "cohete",
+  "artillería", "bombardeo aéreo", "dron armado",
+  // ── Conflicto armado (EN) ──────────────────────────────────────────────
+  "armed conflict", "bombing", "airstrike", "shelling",
+  "offensive", "assault", "ambush", "massacre", "genocide",
+  "war crime", "atrocity", "siege", "civilian casualties",
+  "killed in action", "death toll", "sniper", "crossfire",
+  "drone strike", "missile strike", "rocket attack",
+  "military operation", "ground offensive", "air raid",
+  // ── Terrorismo y extremismo (ES) ──────────────────────────────────────
+  "terrorismo", "atentado", "yihadismo", "extremismo violento",
+  "célula terrorista", "ataque suicida", "bomba humana",
+  "toma de rehenes", "secuestro masivo",
+  // ── Terrorismo y extremismo (EN) ──────────────────────────────────────
+  "terrorism", "terrorist attack", "jihadism", "violent extremism",
+  "terrorist cell", "suicide bombing", "hostage taking",
+  "car bomb", "improvised explosive",
+  // ── Tensión diplomática (ES) ───────────────────────────────────────────
+  "sanciones", "embargo", "expulsión de embajador", "ruptura diplomática",
+  "ultimátum", "escalada", "confrontación", "rivalidad",
+  "bloqueo naval", "bloqueo aéreo", "zona de exclusión",
+  "amenaza nuclear", "alerta máxima",
+  // ── Tensión diplomática (EN) ───────────────────────────────────────────
+  "sanctions", "expulsion of ambassador", "diplomatic rupture",
+  "ultimatum", "escalation", "confrontation", "standoff",
+  "naval blockade", "air blockade", "exclusion zone",
+  "nuclear threat", "highest alert", "red alert",
+  // ── Seguridad y amenazas (ES) ─────────────────────────────────────────
+  "ciberataque", "hackeo masivo", "espionaje", "sabotaje",
+  "ataque a infraestructura", "amenaza terrorista",
+  "alerta de seguridad", "estado de alerta", "emergencia nacional",
+  // ── Seguridad y amenazas (EN) ─────────────────────────────────────────
+  "cyberattack", "mass hacking", "espionage", "sabotage",
+  "infrastructure attack", "terrorist threat",
+  "security alert", "national emergency", "threat level raised",
+  // ── Inestabilidad política (ES) ───────────────────────────────────────
+  "golpe de estado", "golpe militar", "ley marcial",
+  "estado de excepción", "crisis constitucional",
+  "fraude electoral", "manipulación electoral",
+  "represión política", "purga política",
+  "disturbios", "revuelta", "insurreción",
+  // ── Inestabilidad política (EN) ───────────────────────────────────────
+  "military coup", "martial law", "state of emergency",
+  "constitutional crisis", "electoral fraud",
+  "political repression", "political purge",
+  "riots", "revolt", "insurrection", "uprising",
+  // ── Militar general (ES+EN) ───────────────────────────────────────────
+  "nuclear", "armas de destrucción masiva", "weapons of mass destruction",
+  "movilización de tropas", "troops mobilized", "despliegue de fuerzas",
+  "forces deployed", "ejercicios militares", "military drills",
+  "carrera armamentista", "arms race", "rearmamento",
+  "otan alerta", "nato alert", "artículo 5"
 ];
+
+
 
 const negativeKeywords = [
-  // Conflicto armado
-  "guerra", "war", "conflict", "conflicto", "ataque", "attack", "bombardeo",
-  "invasion", "invasión", "casualty", "casualties", "muertos", "killed", "dead",
-  "herido", "wounded", "injured", "víctima", "victima", "victim",
-  "masacre", "massacre", "ejecución", "execution", "golpe", "coup",
-  "ofensiva", "offensive", "asalto", "assault", "emboscada", "ambush",
-  "guerrilla", "insurgency", "insurgencia", "milicia", "militia",
-  // Economía negativa
-  "crisis", "crash", "colapso", "collapse", "caída", "caida", "desplome",
-  "recesion", "recesión", "recession", "inflacion", "inflación", "inflation",
-  "quiebra", "bankruptcy", "default", "impago", "deuda impagable",
-  "desempleo", "unemployment", "despidos", "layoffs", "cierre masivo",
-  "contraccion", "contracción", "contraction", "estanflacion", "stagflation",
-  "escasez", "shortage", "desabastecimiento", "desvalorización",
-  // Seguridad y represión
-  "sancion", "sanción", "amenaza", "bloqueo", "ciberataque", "cyberattack",
-  "terrorismo", "terrorism", "violencia", "violence", "represion", "represión",
-  "tension", "tensión", "escalada", "escalation", "secuestro", "kidnapping",
-  "arresto", "arrest", "detencion", "detención", "prisionero", "prisoner",
-  "tortura", "torture", "censura", "censorship", "purga", "purge",
-  "represalia", "retaliation", "embargo", "aislamiento", "isolation",
-  // Desastres naturales y humanitarios
-  "accidente", "accident", "incendio", "fire", "inundacion", "flood",
-  "terremoto", "earthquake", "huracán", "huracan", "tornado", "tifón",
-  "epidemia", "epidemic", "pandemia", "pandemic", "brote", "outbreak",
-  "hambruna", "famine", "desplazados", "displaced", "refugiados", "refugees",
-  "contaminación", "contamination", "vertido", "spill", "catástrofe",
-  // Crisis energética y suministros
-  "apagón", "apagon", "blackout", "power outage", "power cut",
-  "cortes de energía", "cortes de luz", "corte de suministro",
-  "déficit energético", "energy deficit", "energy shortage",
-  "racionamiento", "rationing", "desabastecimiento energético",
-  "crisis energética", "energy crisis", "crisis eléctrica",
-  "alza de precios", "price spike", "subida de precios",
-  "sequía severa", "severe drought", "ola de calor extrema",
-  // Escándalos e inestabilidad
-  "escándalo", "scandal", "corrupcion", "corruption", "fraude", "fraud",
-  "manipulación", "manipulacion", "desinformacion", "disinformation",
-  "protesta violenta", "riot", "disturbio", "unrest", "revuelta", "revolt",
-  "implosión", "implosion", "fractura", "rift", "ruptura", "breakdown"
+  // ── Conflicto y guerra (ES) ───────────────────────────────────────────
+  "guerra", "bombardeo", "invasion", "invasión", "masacre", "genocidio",
+  "ejecución", "ataque", "ofensiva", "asalto", "emboscada",
+  "víctimas", "muertos", "heridos", "bajas", "cadáveres",
+  "crimen de guerra", "atrocidad", "fusilamiento",
+  "milicia", "guerrilla", "insurgencia", "paramilitares",
+  "bomba", "explosión", "detonación",
+  // ── Conflicto y guerra (EN) ───────────────────────────────────────────
+  "war", "bombing", "invasion", "massacre", "genocide",
+  "execution", "attack", "offensive", "assault", "ambush",
+  "victims", "killed", "dead", "wounded", "casualties", "bodies",
+  "war crime", "atrocity",
+  "militia", "guerrilla", "insurgency", "paramilitary",
+  "bomb", "explosion", "detonation", "blast",
+  // ── Terrorismo (ES+EN) ────────────────────────────────────────────────
+  "terrorismo", "atentado", "terrorista", "yihad",
+  "terrorism", "terrorist attack", "jihad", "extremist",
+  "suicide bombing", "ataque suicida",
+  // ── Crisis económica (ES) ─────────────────────────────────────────────
+  "recesion", "recesión", "crisis económica", "colapso económico",
+  "quiebra", "bancarrota", "impago", "default soberano",
+  "hiperinflación", "devaluación", "desplome",
+  "desempleo masivo", "despidos masivos", "cierre de empresas",
+  "contracción económica", "estanflación",
+  "déficit fiscal", "deuda impagable", "corralito",
+  "rebaja de calificación", "rescate financiero",
+  "caída del PIB", "recortes presupuestarios",
+  // ── Crisis económica (EN) ─────────────────────────────────────────────
+  "recession", "economic crisis", "economic collapse",
+  "bankruptcy", "sovereign default", "debt default",
+  "hyperinflation", "devaluation", "market crash",
+  "mass unemployment", "mass layoffs", "company closures",
+  "economic contraction", "stagflation",
+  "fiscal deficit", "unpayable debt", "bank run",
+  "credit downgrade", "financial bailout",
+  "GDP contraction", "budget cuts", "austerity measures",
+  // ── Corrupción y escándalos (ES) ──────────────────────────────────────
+  "corrupción", "soborno", "cohecho", "malversación",
+  "desvío de fondos", "escándalo político", "nepotismo",
+  "tráfico de influencias", "blanqueo de capitales",
+  "evasión fiscal", "financiación ilegal",
+  "imputado", "investigado", "detenido", "procesado",
+  "fraude", "estafa", "engaño sistemático",
+  // ── Corrupción y escándalos (EN) ──────────────────────────────────────
+  "corruption", "bribery", "embezzlement", "misappropriation",
+  "diversion of funds", "political scandal", "nepotism",
+  "influence peddling", "money laundering",
+  "tax evasion", "illegal financing",
+  "indicted", "investigated", "detained", "charged",
+  "fraud", "scam", "systematic deception",
+  // ── Represión y derechos humanos (ES) ────────────────────────────────
+  "represión", "tortura", "persecución política",
+  "detención arbitraria", "preso político", "prisionero de conciencia",
+  "censura", "purga", "exilio forzado",
+  "violación de derechos humanos", "brutalidad policial",
+  "desaparición forzada", "ejecución extrajudicial",
+  "discriminación sistémica", "apartheid",
+  // ── Represión y derechos humanos (EN) ────────────────────────────────
+  "repression", "torture", "political persecution",
+  "arbitrary detention", "political prisoner", "prisoner of conscience",
+  "censorship", "purge", "forced exile",
+  "human rights violation", "police brutality",
+  "forced disappearance", "extrajudicial killing",
+  "systemic discrimination", "ethnic cleansing",
+  // ── Desastres naturales (ES) ──────────────────────────────────────────
+  "terremoto devastador", "tsunami", "huracán", "tifón", "ciclón",
+  "inundación catastrófica", "sequía severa", "sequía extrema",
+  "incendio forestal masivo", "erupción volcánica",
+  "corrimiento de tierras", "avalancha", "ola de calor mortal",
+  "catástrofe natural", "emergencia climática",
+  // ── Desastres naturales (EN) ──────────────────────────────────────────
+  "devastating earthquake", "tsunami", "hurricane", "typhoon", "cyclone",
+  "catastrophic flood", "severe drought", "extreme drought",
+  "massive wildfire", "volcanic eruption",
+  "landslide", "avalanche", "deadly heatwave",
+  "natural disaster", "climate emergency",
+  // ── Crisis sanitaria (ES+EN) ──────────────────────────────────────────
+  "pandemia", "epidemia", "brote viral", "contagio masivo",
+  "emergencia sanitaria", "colapso hospitalario",
+  "escasez de medicamentos", "muertes masivas por enfermedad",
+  "pandemic", "epidemic", "viral outbreak", "mass contagion",
+  "health emergency", "hospital collapse",
+  "medicine shortage", "mass deaths from disease",
+  // ── Crisis energética (ES) ────────────────────────────────────────────
+  "apagón", "corte de luz", "corte de energía", "corte de suministro",
+  "crisis energética", "déficit energético", "escasez de gas",
+  "racionamiento energético", "colapso energético",
+  "precios disparados de energía", "crisis eléctrica",
+  // ── Crisis energética (EN) ────────────────────────────────────────────
+  "blackout", "power outage", "power cut", "supply cut",
+  "energy crisis", "energy deficit", "gas shortage",
+  "energy rationing", "energy collapse",
+  "energy price spike", "electricity crisis",
+  // ── Desastres medioambientales (ES+EN) ───────────────────────────────
+  "derrame de petróleo", "vertido tóxico", "contaminación grave",
+  "catástrofe medioambiental", "desastre ecológico",
+  "oil spill", "toxic spill", "severe pollution",
+  "environmental catastrophe", "ecological disaster",
+  // ── Migración y crisis humanitaria (ES) ──────────────────────────────
+  "crisis migratoria", "naufragio de migrantes", "muertos en frontera",
+  "expulsión masiva", "deportación masiva",
+  "crisis de refugiados", "campos de refugiados",
+  "hambruna", "escasez de alimentos",
+  // ── Migración y crisis humanitaria (EN) ──────────────────────────────
+  "migration crisis", "migrant shipwreck", "deaths at border",
+  "mass expulsion", "mass deportation",
+  "refugee crisis", "refugee camps",
+  "famine", "food shortage", "food insecurity",
+  // ── Ciberseguridad (ES+EN) ────────────────────────────────────────────
+  "ciberataque", "hackeo", "ransomware", "robo de datos",
+  "brecha de seguridad", "ataque a infraestructura crítica",
+  "cyberattack", "hacking", "data breach",
+  "ransomware attack", "critical infrastructure attack",
+  // ── Inestabilidad política (ES+EN) ───────────────────────────────────
+  "golpe de estado", "golpe militar", "ley marcial",
+  "estado de excepción", "crisis constitucional",
+  "disolución forzada", "fraude electoral",
+  "coup", "military coup", "martial law",
+  "state of emergency", "constitutional crisis",
+  "forced dissolution", "electoral fraud",
+  // ── Tensión social (ES+EN) ────────────────────────────────────────────
+  "disturbios violentos", "represión de manifestantes",
+  "enfrentamientos", "violencia callejera",
+  "violent riots", "crackdown on protesters",
+  "clashes", "street violence"
 ];
 
+
+
 const positiveKeywords = [
-  // ── Diplomacia y paz (frases específicas) ──────────────────────────────
-  "acuerdo de paz", "peace agreement", "peace deal", "peace talks",
-  "alto el fuego", "ceasefire", "alto al fuego", "tregua firmada",
-  "tratado firmado", "treaty signed", "acuerdo firmado", "deal signed",
-  "fin de la guerra", "end of war", "fin del conflicto", "end of conflict",
-  "cese de hostilidades", "hostilities ended",
-  "diálogo de paz", "peace dialogue", "negociaciones de paz",
-  "normalización diplomática", "diplomatic normalization",
-  "reunificación", "reconciliación", "reconciliation",
-  "liberación de rehenes", "hostages freed", "presos liberados",
-  "retirada de tropas", "troops withdrawal", "desmilitarización",
-  "acuerdo histórico", "historic agreement", "historic deal",
-  // ── Economía positiva (frases, no palabras sueltas) ────────────────────
-  "crecimiento económico", "economic growth", "economic expansion",
-  "máximo histórico", "all-time high", "record de empleo",
-  "inversión extranjera", "foreign investment", "atrae inversión",
-  "pleno empleo", "full employment", "creación de empleo", "job creation",
-  "superávit presupuestario", "budget surplus",
-  "rebote económico", "economic rebound", "recuperación económica",
-  "acuerdo comercial", "trade agreement", "trade deal",
-  "libre comercio", "free trade", "exportaciones récord",
-  "prosperidad", "prosperity", "auge económico",
-  // ── Estabilidad y desescalada ──────────────────────────────────────────
-  "desescalada", "de-escalation", "tensión reducida", "tension reduced",
-  "estabilidad política", "political stability",
-  "elecciones libres", "free elections", "democracia restaurada",
-  "reformas aprobadas", "reforms approved",
-  // ── Humanitario y científico (frases) ─────────────────────────────────
-  "ayuda humanitaria", "humanitarian aid", "corredor humanitario",
-  "vacuna aprobada", "vaccine approved", "cura encontrada",
-  "avance médico", "medical breakthrough", "avance científico",
-  "rescate exitoso", "successful rescue",
-  "solidaridad internacional", "international solidarity",
-  "derechos garantizados", "rights guaranteed",
-  "libertad de prensa", "press freedom"
+  // ── Paz y diplomacia (ES) ─────────────────────────────────────────────
+  "acuerdo de paz", "acuerdo de paz firmado", "paz firmada",
+  "alto el fuego", "alto el fuego acordado", "cese el fuego",
+  "tregua firmada", "armisticio", "fin de la guerra",
+  "fin del conflicto", "cese de hostilidades",
+  "negociaciones de paz exitosas", "diálogo de paz",
+  "tratado de paz", "tratado firmado",
+  "normalización diplomática", "restablecimiento de relaciones",
+  "retirada de tropas", "desmilitarización acordada",
+  "liberación de rehenes", "presos políticos liberados",
+  "reunificación", "reconciliación nacional",
+  "acuerdo histórico", "cumbre de paz",
+  // ── Paz y diplomacia (EN) ─────────────────────────────────────────────
+  "peace deal", "peace agreement", "peace deal signed",
+  "ceasefire", "ceasefire declared", "ceasefire agreement",
+  "truce signed", "armistice", "end of war",
+  "end of conflict", "hostilities ended",
+  "successful peace negotiations", "peace talks succeed",
+  "peace treaty", "treaty signed",
+  "diplomatic normalization", "relations restored",
+  "troops withdrawal", "demilitarization agreed",
+  "hostages freed", "political prisoners released",
+  "reunification", "national reconciliation",
+  "historic agreement", "peace summit",
+  // ── Crecimiento económico (ES) ────────────────────────────────────────
+  "crecimiento económico", "crecimiento del PIB",
+  "récord de exportaciones", "exportaciones récord",
+  "creación de empleos", "creación de empleo",
+  "reducción del desempleo", "desempleo cae",
+  "inversión récord", "inversión extranjera récord",
+  "superávit presupuestario", "superávit fiscal",
+  "auge económico", "recuperación económica sólida",
+  "inflación controlada", "inflación cae",
+  "deuda reducida", "deuda cae",
+  "libre comercio firmado", "acuerdo comercial firmado",
+  "pleno empleo", "máximo histórico de empleo",
+  // ── Crecimiento económico (EN) ────────────────────────────────────────
+  "economic growth", "GDP growth", "GDP rises",
+  "export record", "record exports",
+  "job creation", "jobs created", "new jobs",
+  "unemployment falls", "unemployment drops",
+  "record investment", "foreign investment record",
+  "budget surplus", "fiscal surplus",
+  "economic boom", "strong economic recovery",
+  "inflation under control", "inflation falls",
+  "debt reduced", "debt falls",
+  "free trade agreement signed", "trade deal signed",
+  "full employment", "record employment",
+  "economic expansion", "growth forecast raised",
+  // ── Estabilidad y democracia (ES) ────────────────────────────────────
+  "elecciones libres y justas", "democracia restaurada",
+  "transición democrática exitosa", "estado de derecho fortalecido",
+  "corrupción sancionada", "lucha anticorrupción",
+  "reforma aprobada", "reformas históricas aprobadas",
+  "constitución aprobada", "referéndum exitoso",
+  "estabilidad política consolidada",
+  // ── Estabilidad y democracia (EN) ────────────────────────────────────
+  "free and fair elections", "democracy restored",
+  "successful democratic transition", "rule of law strengthened",
+  "corruption sanctioned", "anticorruption victory",
+  "landmark reform passed", "historic reforms approved",
+  "constitution approved", "successful referendum",
+  "political stability consolidated",
+  // ── Avances científicos y médicos (ES) ───────────────────────────────
+  "vacuna aprobada", "vacuna efectiva", "cura descubierta",
+  "tratamiento aprobado", "avance médico", "avance científico",
+  "descubrimiento histórico", "medicamento aprobado",
+  "ensayo clínico exitoso", "erradicación de enfermedad",
+  // ── Avances científicos y médicos (EN) ───────────────────────────────
+  "vaccine approved", "effective vaccine", "cure found",
+  "treatment approved", "medical breakthrough",
+  "scientific breakthrough", "historic discovery",
+  "drug approved", "successful clinical trial",
+  "disease eradicated",
+  // ── Humanitario (ES+EN) ───────────────────────────────────────────────
+  "ayuda humanitaria entregada", "corredor humanitario abierto",
+  "rescate exitoso", "sobrevivientes rescatados",
+  "hambruna superada", "seguridad alimentaria mejorada",
+  "pobreza reducida", "pobreza cae",
+  "humanitarian aid delivered", "humanitarian corridor opened",
+  "successful rescue", "survivors rescued",
+  "famine averted", "food security improved",
+  "poverty reduced", "poverty falls",
+  // ── Medioambiente positivo (ES+EN) ────────────────────────────────────
+  "acuerdo climático firmado", "acuerdo de París cumplido",
+  "emisiones reducidas", "emisiones caen",
+  "energía renovable récord", "récord de energía solar",
+  "reforestación masiva", "bosques recuperados",
+  "especie recuperada", "biodiversidad mejorada",
+  "climate deal signed", "Paris agreement met",
+  "emissions reduced", "emissions fall",
+  "renewable energy record", "solar energy record",
+  "mass reforestation", "forests recovered",
+  "species recovered", "biodiversity improved",
+  // ── Derechos y libertades (ES+EN) ────────────────────────────────────
+  "derechos garantizados", "libertad de prensa garantizada",
+  "liberación de presos políticos", "amnistía aprobada",
+  "igualdad reconocida", "derechos ampliados",
+  "rights guaranteed", "press freedom guaranteed",
+  "political prisoners freed", "amnesty approved",
+  "equality recognized", "rights expanded"
 ];
+
+
 
 /* =========================
    D3 GLOBE — NÚCLEO
@@ -1650,11 +1837,28 @@ function renderBriefing(groups = [], analysis = null) {
 ========================= */
 /* ── Intensificadores y patrones de negación ── */
 const _INTENSIFIERS = [
-  "muy", "extremadamente", "crítico", "grave", "severo", "urgente", "masivo",
-  "brutal", "dramatically", "severely", "critically", "acute",
-  "unprecedented", "sin precedentes", "profundo", "agudo", "intenso",
-  "fuerte", "gran", "enorme", "catastrófico", "catastrophic", "record", "récord"
+  // ES — magnitud
+  "extremadamente", "devastador", "catastrófico", "catastrófica",
+  "masivo", "masiva", "masivos", "masivas",
+  "crítico", "crítica", "grave", "graves",
+  "severo", "severa", "severos", "severas",
+  "urgente", "urgentes", "alarmante", "alarmantes",
+  "brutal", "brutales", "violento", "violenta",
+  "sin precedentes", "histórico sin precedentes",
+  "total", "absoluto", "absoluta",
+  "extremo", "extrema", "profundo", "agudo", "aguda",
+  "caótico", "caótica", "dramático", "dramática",
+  "repentino", "repentina", "fulminante",
+  // EN — magnitude
+  "devastating", "catastrophic", "massive", "critical",
+  "severe", "urgent", "alarming", "brutal", "violent",
+  "unprecedented", "total", "absolute",
+  "extreme", "profound", "acute", "chaotic",
+  "dramatic", "sudden", "sweeping", "overwhelming",
+  "dire", "grave", "serious", "deadly", "fatal",
+  "worst", "historic crisis"
 ];
+
 const _NEGATIONS = [
   "no ", "sin ", "nunca ", "jamás ", "never ", "without ", "not ",
   "fails to", "fracasa", "rechaza", "niega", "descarta", "evita", "excluye"
