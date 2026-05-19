@@ -542,7 +542,7 @@ async function queryD1ByCountry(env, countryKey, query = "") {
     result = await env.DB.prepare(
       `SELECT * FROM articles WHERE country = ? AND fetched_at > ? AND (title LIKE ? OR summary LIKE ?)
        ORDER BY pub_date DESC LIMIT 30`
-    ).bind(countryKey, cutoff, `%${query}%`, `%${query}%`).all();
+    ).bind(countryKey, cutoff, `%${normalizedQ}%`, `%${normalizedQ}%`).all();
   } else {
     result = await env.DB.prepare(
       `SELECT * FROM articles WHERE country = ? AND fetched_at > ?
@@ -675,9 +675,13 @@ async function ingestAllFeeds(env) {
   // Recopilar todos los feeds: países + alertas internacionales
   const allFeeds = [];
 
+  const seenFeedUrls = new Set();
   for (const [countryKey, country] of Object.entries(FEEDS_DB.countries || {})) {
     for (const feed of country.feeds || []) {
-      allFeeds.push({ ...feed, country: countryKey });
+      if (!seenFeedUrls.has(feed.url)) {
+        seenFeedUrls.add(feed.url);
+        allFeeds.push({ ...feed, country: countryKey });
+      }
     }
   }
 

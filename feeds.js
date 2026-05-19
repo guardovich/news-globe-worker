@@ -26,17 +26,17 @@ export const FEEDS_DB = {
 
   /* ─── TEMAS ───────────────────────────────────── */
   topics: {
-    ia:             ["ia", "inteligencia artificial", "artificial intelligence", "ai", "llm", "openai", "chatgpt", "deepseek", "gemini"],
-    energia:        ["energia", "energía", "energy", "oil", "gas", "lng", "renewables", "electricity", "petróleo", "nuclear"],
-    otan:           ["otan", "nato", "alianza atlántica", "alliance"],
+    ia:             ["inteligencia artificial", "artificial intelligence", "machine learning", "deep learning", "large language model", "generative ai", "llm", "openai", "chatgpt", "deepseek", "gemini", "modelo de lenguaje", "aprendizaje automatico"],
+    energia:        ["energía", "energy", "petróleo", "petroleum", "oil", "gas", "lng", "electricity", "electricidad", "gasoducto", "pipeline", "nuclear energy", "energia nuclear", "barrel", "barril"],
+    otan:           ["otan", "nato", "alianza atlantica", "north atlantic treaty", "alianza militar", "expansion otan", "nato enlargement", "articulo 5", "article 5", "cumbre otan", "nato summit", "transatlantico", "transatlantic defense"],
     ciberseguridad: ["ciberseguridad", "cybersecurity", "ransomware", "malware", "hack", "ciberataque"],
-    defensa:        ["defensa", "defense", "military", "militar", "ejército", "army"],
+    defensa:        ["defensa", "defense", "military", "militar", "ejercito", "army", "weapon", "arma", "missile", "misil", "pentagon", "presupuesto defensa", "defense budget", "nato forces", "fuerzas otan", "armamento", "armament", "air force", "fuerza aerea", "navy", "armada", "bundeswehr", "mod uk"],
     china:          ["china", "beijing", "taiwan", "xi jinping", "pcc"],
     rusia:          ["rusia", "russia", "kremlin", "putin", "ucrania", "ukraine"],
     economia:       ["economia", "economy", "inflation", "markets", "mercados", "inflación", "recession"],
     migracion:      ["migración", "migration", "refugees", "refugiados", "asylum", "border"],
-    clima:          ["clima", "climate", "cambio climático", "emissions", "cop", "renewables"],
-    conflicto:      ["conflicto", "conflict", "guerra", "war", "bombardeo", "bombing", "ceasefire"]
+    clima:          ["cambio climatico", "climate change", "global warming", "calentamiento global", "net zero", "carbon emissions", "greenhouse", "emisiones", "renovables", "renewables", "energia solar", "solar energy", "wind energy", "eolica", "climate conference", "conferencia climatica", "paris agreement", "acuerdo de paris"],
+    conflicto:      ["conflicto", "conflict", "guerra", "war", "bombardeo", "bombing", "ceasefire", "alto el fuego", "nuclear weapon", "arma nuclear", "weapons of mass", "armas de destruccion", "misil balistico", "ballistic missile", "ofensiva militar", "military offensive", "bajas civiles", "civilian casualties"]
   },
 
   /* ─── PAÍSES ──────────────────────────────────── */

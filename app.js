@@ -452,7 +452,7 @@ const positiveKeywords = [
   "normalización diplomática", "reunificación", "rapprochement",
   "reconciliacion", "reconciliation", "acercamiento",
   // Economía positiva
-  "crece", "crecimiento", "growth", "expansion", "expande", "auge",
+  "crece", "crecimiento", "growth", "economic expansion", "expande",
   "máximo histórico", "all-time high", "boom",
   "inversion", "inversión", "investment", "financiacion", "funding",
   "empleo", "employment", "jobs", "trabajo", "pleno empleo",
@@ -1619,8 +1619,8 @@ function renderBriefing(groups = [], analysis = null) {
 /* ── Intensificadores y patrones de negación ── */
 const _INTENSIFIERS = [
   "muy", "extremadamente", "crítico", "grave", "severo", "urgente", "masivo",
-  "histórico", "brutal", "dramatically", "severely", "critically", "acute",
-  "unprecedented", "sin precedentes", "total", "profundo", "agudo", "intenso",
+  "brutal", "dramatically", "severely", "critically", "acute",
+  "unprecedented", "sin precedentes", "profundo", "agudo", "intenso",
   "fuerte", "gran", "enorme", "catastrófico", "catastrophic", "record", "récord"
 ];
 const _NEGATIONS = [
@@ -1631,7 +1631,7 @@ const _NEGATIONS = [
 /* Comprueba si 'word' aparece como palabra completa en 'text' */
 function _matchWord(text, word) {
   // Para palabras cortas (<=3 chars) o con espacios usamos includes directo
-  if (word.length <= 3 || word.includes(" ")) return text.includes(word);
+  if (word.length <= 2 || word.includes(" ")) return text.includes(word);
   // Para el resto usamos regex con límite de palabra (funciona bien en ASCII)
   try {
     return new RegExp("(?<![a-záéíóúüñ])" + word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-záéíóúüñ])", "i").test(text);
@@ -1686,6 +1686,7 @@ function detectMediaMood(items = []) {
   if (!items.length) return 'NEUTRAL';
   const { positiveWeight, negativeWeight } = scoreSentiment(items);
   const total = positiveWeight + negativeWeight;
+  if (total === 0) return 'SIN DATOS';
   if (total < 1.0) return 'NEUTRAL →';
   // Normalización suavizada: divide entre el total real para evitar extremos
   const ratio = (positiveWeight - negativeWeight) / (total + 4);
@@ -1726,21 +1727,24 @@ function calculateTensionIndex(items = []) {
     kw => !critical.includes(kw) && !highImpact.includes(kw)
   );
 
-  // Bonus por intensificadores contextuales
-  const intensBonus = _INTENSIFIERS.some(i => text.includes(i)) ? 14 : 0;
+  // Bonus por intensificadores: escalable, máx +15
+  const intensCount = _INTENSIFIERS.filter(i => text.includes(i)).length;
+  const intensBonus = Math.min(intensCount * 3, 15);
 
   let score = 0;
-  critical.forEach(kw    => { if (_matchWord(text, kw)) score += 22; });
-  highImpact.forEach(kw  => { if (_matchWord(text, kw)) score += 13; });
-  mediumImpact.forEach(kw => { if (_matchWord(text, kw)) score +=  7; });
-  score += intensBonus;
-  // Bonus de volumen moderado: máx +10 en lugar de +50
-  score += Math.min(items.length, 20) * 0.5;
-  // Normalizar por número de artículos para evitar que el volumen infle la tensión
-  const perArticle = score / Math.max(items.length, 1);
-  const normalized = Math.round((score * 0.6) + (perArticle * 0.4));
+  // Scoring por artículo con cap individual para evitar saturación
+  let totalScore = 0;
+  items.forEach(item => {
+    const t = `${item.title || ""} ${item.summary || ""}`.toLowerCase();
+    let s = 0;
+    critical.forEach(kw    => { if (_matchWord(t, kw)) s += 22; });
+    highImpact.forEach(kw  => { if (_matchWord(t, kw)) s += 13; });
+    mediumImpact.forEach(kw => { if (_matchWord(t, kw)) s +=  7; });
+    totalScore += Math.min(s, 30); // Cap por artículo
+  });
 
-  return Math.min(100, normalized);
+  const avg = totalScore / Math.max(items.length, 1);
+  return Math.min(100, Math.round(avg + intensBonus));
 }
 
 function getDefconLikeSignal(tensionIndex) {
@@ -1808,6 +1812,7 @@ function renderHotspots(hotspots = []) {
 }
 
 const MOOD_COLORS = {
+  'SIN DATOS':   '#475569',
   'MUY NEG ▼▼': '#ef4444',
   'NEGATIVO ▼':  '#f97316',
   'TENSO ↘':     '#eab308',
