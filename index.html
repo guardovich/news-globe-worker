@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoNews Monitor — Global Intelligence Dashboard</title>
+  <meta name="description" content="Monitor de inteligencia geopolítica. Noticias mundiales en tiempo real, briefings comparativos y análisis de señales de riesgo." />
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flag-icons/7.2.3/css/flag-icons.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+
+  <style>
+    /* ═══════════════════════════════════
+       TOKENS
+    ═══════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #060810;
+      --surface:   #0b0f1c;
+      --card:      #0f1525;
+      --card2:     #131a2e;
+      --border:    #1a2238;
+      --border2:   #243050;
+      --accent:    #3b82f6;
+      --accent2:   #7c3aed;
+      --accent3:   #0ea5e9;
+      --green:     #10b981;
+      --red:       #ef4444;
+      --amber:     #f59e0b;
+      --text:      #e2e8f0;
+      --dim:       #94a3b8;
+      --muted:     #475569;
+      --r:         8px;
+      --font:      'Inter', 'Segoe UI', system-ui, sans-serif;
+      --mono:      'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+    a { color: var(--accent); }
+    button, input { font-family: inherit; }
+
+    /* ═══════════════════════════════════
+       RETRO TICKER
+    ═══════════════════════════════════ */
+    .retro-ticker-bar {
+      background: #020408;
+      border-bottom: 1px solid var(--border);
+      height: 26px; display: flex; align-items: center; overflow: hidden;
+    }
+    .retro-ticker-label {
+      flex-shrink: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      color: #fff; font-family: var(--mono); font-size: 9px; font-weight: 700;
+      letter-spacing: 1.5px; padding: 0 12px; height: 100%;
+      display: flex; align-items: center; text-transform: uppercase; gap: 6px;
+    }
+    .retro-ticker-scroll { overflow: hidden; flex: 1; }
+    #retroTickerTrack {
+      display: flex; animation: scroll-left 50s linear infinite; white-space: nowrap;
+    }
+    .retro-ticker-item {
+      font-family: var(--mono); font-size: 10px; color: #6ee7b7;
+      letter-spacing: 0.4px; padding: 0 28px;
+      border-right: 1px solid var(--border); display: inline-block;
+    }
+    @keyframes scroll-left { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    /* ═══════════════════════════════════
+       HEADER
+    ═══════════════════════════════════ */
+    header {
+      background: linear-gradient(90deg, #07091a 0%, #090d22 60%, #060810 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .header-inner {
+      max-width: 1640px; margin: 0 auto;
+      display: grid; grid-template-columns: auto 1fr auto;
+      align-items: center; gap: 24px; height: 104px;
+    }
+    .logo { display: flex; align-items: center; gap: 14px; text-decoration: none; }
+    .logo img {
+      height: 96px; width: 96px; object-fit: contain;
+      border-radius: 12px;
+      filter: drop-shadow(0 0 16px rgba(59,130,246,0.55));
+    }
+    .logo-fallback {
+      width: 96px; height: 96px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+      box-shadow: 0 0 20px rgba(59,130,246,0.35);
+    }
+    .logo-textblock { display: flex; flex-direction: column; gap: 1px; }
+    .logo-name { font-size: 17px; font-weight: 800; color: var(--text); letter-spacing: 0.4px; white-space: nowrap; }
+    .logo-name em { color: var(--accent); font-style: normal; }
+    .logo-sub { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); font-family: var(--mono); }
+
+    .dash-status { display: flex; gap: 20px; align-items: center; justify-content: center; }
+    .dash-stat { display: flex; flex-direction: column; align-items: center; }
+    .dash-stat-label { font-size: 8px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
+    .dash-stat-value { font-size: 14px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+
+    .world-clocks { display: flex; gap: 14px; align-items: center; }
+    .clock-item { display: flex; flex-direction: column; align-items: center; }
+    .clock-city { font-size: 7px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .clock-time { font-size: 12px; font-weight: 700; color: var(--accent3); font-family: var(--mono); }
+
+    /* ═══════════════════════════════════
+       MAIN GRID
+    ═══════════════════════════════════ */
+    .app-body {
+      max-width: 1640px; margin: 0 auto;
+      padding: 16px 20px 48px;
+      display: grid;
+      grid-template-columns: 1fr 456px;
+      gap: 16px;
+    }
+    .left-col { display: flex; flex-direction: column; gap: 14px; }
+
+    /* ═══════════════════════════════════
+       MAP — 3D Globe
+    ═══════════════════════════════════ */
+    .map-wrap {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border2);
+      box-shadow: 0 0 80px rgba(59,130,246,0.10), 0 0 160px rgba(59,130,246,0.04), inset 0 0 0 1px rgba(255,255,255,0.04);
+      background: radial-gradient(ellipse 90% 80% at 50% 55%, #060c22 0%, #010206 100%);
+    }
+
+    #globe-canvas { width: 100%; height: 480px; display: block; position: relative; z-index: 1; cursor: grab; border-radius: 12px; }
+    .map-label {
+      position: absolute; top: 12px; left: 12px;
+      background: rgba(6,8,16,0.75); backdrop-filter: blur(8px);
+      border: 1px solid var(--border2); border-radius: 6px;
+      padding: 4px 10px; font-size: 9px; text-transform: uppercase;
+      letter-spacing: 1.5px; color: var(--dim); font-family: var(--mono);
+      display: flex; align-items: center; gap: 6px; pointer-events: none;
+    }
+    .map-dot { width: 6px; height: 6px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(16,185,129,0.5); } 50% { opacity:.6; box-shadow: 0 0 0 4px rgba(16,185,129,0); } }
+
+    /* ═══════════════════════════════════
+       SIGNAL BAR
+    ═══════════════════════════════════ */
+    .signal-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr) repeat(6, auto);
+      gap: 8px;
+    }
+    .signal-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 10px 14px;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .signal-label { font-size: 8px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-family: var(--mono); }
+    .signal-value { font-size: 14px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+    .clock-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 8px 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+
+    /* ═══════════════════════════════════
+       RESULTS
+    ═══════════════════════════════════ */
+    .results-outer {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 16px;
+    }
+    .results-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+    }
+    .section-label {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px;
+      color: var(--muted); font-family: var(--mono);
+      display: flex; align-items: center; gap: 7px;
+    }
+    .section-label::before {
+      content: ''; display: inline-block; width: 2px; height: 12px;
+      background: linear-gradient(180deg, var(--accent), var(--accent2));
+      border-radius: 1px;
+    }
+    #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: 10px; }
+    #briefingResults { display: flex; flex-direction: column; gap: 12px; }
+
+    /* ═══════════════════════════════════
+       RIGHT COLUMN — TAB PANEL
+    ═══════════════════════════════════ */
+    .right-col {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      display: flex; flex-direction: column;
+      position: sticky; top: 8px;
+      max-height: calc(100vh - 16px);
+      overflow-y: auto;
+    }
+
+    /* ═══════════════════════════════════
+       TABS
+    ═══════════════════════════════════ */
+    .tab-bar {
+      display: flex; border-bottom: 1px solid var(--border);
+      background: var(--bg); flex-shrink: 0;
+    }
+    .tab-btn {
+      flex: 1; padding: 12px 6px; font-size: 11px; font-weight: 600;
+      color: var(--muted); background: none; border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer; transition: color .2s, border-color .2s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-icon { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.7; }
+    .tab-btn.active .tab-icon { opacity: 1; }
+
+    .tab-pane { display: none; padding: 16px; flex-direction: column; gap: 14px; }
+    .tab-pane.active { display: flex; }
+
+    /* ═══════════════════════════════════
+       INPUTS & BUTTONS
+    ═══════════════════════════════════ */
+    .panel-label {
+      font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px;
+      color: var(--muted); margin-bottom: 6px; font-family: var(--mono);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .panel-label svg { opacity: 0.5; }
+
+    input[type="text"] {
+      width: 100%;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 13px;
+      padding: 9px 12px; outline: none; transition: border-color .2s;
+    }
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]::placeholder { color: var(--muted); font-size: 12px; }
+
+    .btn-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .btn {
+      padding: 9px 14px; border-radius: 6px; border: none;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), #2563eb); color: #fff; }
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-secondary { background: var(--card); color: var(--dim); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent3); color: var(--text); }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 9px 10px; }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+    .btn-danger { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.25); color: #fca5a5; }
+    .btn-danger:hover { background: rgba(239,68,68,.18); }
+    .btn-sm { padding: 6px 10px; font-size: 11px; }
+    .btn svg { width: 13px; height: 13px; }
+
+    #status { font-size: 11px; color: var(--muted); min-height: 16px; font-family: var(--mono); }
+
+    /* ═══════════════════════════════════
+       MARKET BOARD
+    ═══════════════════════════════════ */
+    #marketBoard { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+    .hud-metric {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .hud-label { font-size: 8px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); font-family: var(--mono); }
+    .hud-value { font-size: 12px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+    .hud-change { font-size: 10px; font-weight: 700; font-family: var(--mono); }
+
+    /* ═══════════════════════════════════
+       GEO TICKER
+    ═══════════════════════════════════ */
+    .geo-ticker-box {
+      background: rgba(14,165,233,.04); border: 1px solid rgba(14,165,233,.14);
+      border-radius: 6px; padding: 10px;
+    }
+    .geo-ticker-label {
+      font-size: 8px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--accent3); margin-bottom: 7px; font-family: var(--mono);
+      display: flex; align-items: center; gap: 6px;
+    }
+    #geoTicker { display: flex; flex-direction: column; gap: 4px; max-height: 100px; overflow-y: auto; }
+    .ticker-item { font-size: 11px; color: var(--dim); line-height: 1.4; padding: 2px 0; border-bottom: 1px solid var(--border); }
+    .ticker-item:last-child { border-bottom: none; }
+
+    /* ═══════════════════════════════════
+       BRIEFING TAB
+    ═══════════════════════════════════ */
+    /* Topic chips */
+    .topic-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .topic-chip {
+      padding: 5px 11px; border-radius: 5px; font-size: 11px; font-weight: 500;
+      border: 1px solid var(--border); background: var(--card); color: var(--dim);
+      cursor: pointer; transition: all .15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .topic-chip:hover { border-color: var(--accent); color: var(--text); }
+    .topic-chip.selected {
+      background: rgba(59,130,246,.15); border-color: var(--accent); color: #93c5fd; font-weight: 700;
+    }
+    .topic-chip svg { width: 11px; height: 11px; opacity: .7; flex-shrink: 0; }
+    .topic-chip.selected svg { opacity: 1; }
+
+    /* Country selector */
+    .country-selector { max-height: 296px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 10px; }
+    .region-label {
+      font-size: 8px; text-transform: uppercase; letter-spacing: 1.2px;
+      color: var(--muted); margin-bottom: 5px; font-family: var(--mono);
+      padding-left: 2px; border-left: 2px solid var(--border2); padding-left: 6px;
+    }
+    .country-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+
+    /* Banderas — flag-icons CSS (estilo propio) */
+    .country-chip .fi,
+    .selected-tag .fi {
+      width: 20px; height: 15px;
+      border-radius: 3px;
+      display: inline-block;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.13);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04);
+      vertical-align: middle;
+      background-size: cover;
+      background-position: center;
+    }
+    .selected-tag .fi {
+      width: 18px; height: 13px;
+    }
+
+    .country-chip {
+      padding: 5px 9px; border-radius: 5px; font-size: 11px; font-weight: 500;
+      border: 1px solid var(--border); background: var(--card); color: var(--dim);
+      cursor: pointer; transition: all .15s;
+      display: flex; align-items: center; gap: 5px; user-select: none;
+    }
+    .country-chip:hover { border-color: var(--accent2); color: var(--text); }
+    .country-chip.selected {
+      background: rgba(124,58,237,.18); border-color: var(--accent2); color: #c4b5fd; font-weight: 700;
+    }
+    .country-chip.selected .flag-img { border-color: rgba(167,139,250,.4); }
+
+    /* Selected tags */
+    .selected-countries {
+      display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px;
+      padding: 6px 8px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    }
+    .selected-tag {
+      background: rgba(124,58,237,.2); border: 1px solid rgba(124,58,237,.4);
+      color: #c4b5fd; font-size: 10px; font-weight: 600;
+      padding: 3px 8px 3px 6px; border-radius: 4px;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .selected-tag-remove {
+      cursor: pointer; color: #a78bfa; font-size: 13px; line-height: 1;
+      background: none; border: none; padding: 0; margin-left: 2px;
+    }
+    .selected-tag-remove:hover { color: #fff; }
+    .selected-placeholder { font-size: 11px; color: var(--muted); align-self: center; }
+
+    /* Run row */
+    .brief-run-row { display: flex; gap: 8px; align-items: center; }
+    .brief-run-row .btn:first-child { flex: 1; justify-content: center; }
+
+    #briefStatus {
+      font-size: 11px; color: var(--muted); min-height: 16px;
+      padding: 7px 10px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 6px; font-family: var(--mono);
+    }
+    #briefStatus.running { color: var(--amber); border-color: rgba(245,158,11,.3); }
+    #briefStatus.done    { color: var(--green);  border-color: rgba(16,185,129,.3); }
+
+    /* ═══════════════════════════════════
+       CARDS
+    ═══════════════════════════════════ */
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 14px;
+      transition: border-color .2s, transform .15s;
+    }
+    .card:hover { border-color: var(--border2); transform: translateY(-1px); }
+    .card h3 { font-size: 13px; font-weight: 600; margin-bottom: 5px; line-height: 1.4; }
+    .card h3 a { color: var(--text); text-decoration: none; }
+    .card h3 a:hover { color: var(--accent); }
+    .card .meta { font-size: 10px; color: var(--muted); margin-bottom: 5px; font-family: var(--mono); }
+    .card .summary { font-size: 12px; color: var(--dim); line-height: 1.5; }
+
+    /* Briefing card internals */
+    .brief-list { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+    .brief-item {
+      padding: 8px 10px;
+      background: rgba(255,255,255,.025);
+      border-left: 2px solid var(--border2);
+      border-radius: 4px; font-size: 12px;
+    }
+    .brief-item strong { display: block; font-size: 9px; color: var(--muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: .7px; font-family: var(--mono); }
+    .brief-item a { font-size: 12px; color: var(--dim); text-decoration: none; }
+    .brief-item a:hover { color: var(--accent); }
+
+    /* ═══════════════════════════════════
+       RADAR — improved layout
+    ═══════════════════════════════════ */
+    .radar-wrap {
+      margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px;
+    }
+    .radar-title {
+      font-size: 8px; text-transform: uppercase; letter-spacing: 2px;
+      color: var(--muted); margin-bottom: 12px; font-family: var(--mono);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .radar-title::after { content:''; flex:1; height:1px; background: var(--border); }
+    .radar-box {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 18px;
+      align-items: center;
+      background: rgba(255,255,255,.018);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .radar-svg { flex-shrink: 0; }
+    .radar-meta { display: flex; flex-direction: column; gap: 7px; }
+    .radar-legend-item { display: flex; align-items: center; gap: 8px; }
+    .radar-legend-label { font-size: 10px; color: var(--dim); flex: 1; }
+    .radar-legend-val { font-size: 10px; font-weight: 700; font-family: var(--mono); color: var(--text); width: 36px; text-align: right; }
+    .radar-legend-bar-track { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; min-width: 40px; }
+    .radar-legend-bar-fill { height: 100%; background: linear-gradient(90deg, rgba(255,80,80,.85), rgba(245,158,11,.6)); border-radius: 2px; }
+    .radar-legend-dot { display: none; }
+
+    /* Country radar card */
+    .country-radar-card {
+      background: linear-gradient(135deg, rgba(124,58,237,.06), rgba(59,130,246,.04));
+      border: 1px solid rgba(124,58,237,.22);
+      border-radius: 10px; padding: 14px;
+    }
+    .country-radar-head {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+    }
+    .country-radar-title {
+      font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .country-radar-title .fi {
+      width: 20px; height: 15px; border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.15);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    .country-radar-meta { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+    .country-radar-layout {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      align-items: center;
+    }
+    .country-radar-visual { flex-shrink: 0; }
+    .country-radar-stats { display: flex; flex-direction: column; gap: 6px; }
+
+    /* Inline stat with bar */
+    .radar-stat { display: flex; flex-direction: column; gap: 2px; }
+    .radar-stat-row { display: flex; justify-content: space-between; align-items: baseline; }
+    .radar-stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; font-family: var(--mono); }
+    .radar-stat-value { font-size: 11px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+    .radar-stat-bar { height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; margin-top: 2px; }
+    .radar-stat-fill { height: 100%; border-radius: 1px; background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+
+    /* ═══════════════════════════════════
+       SIGNALS TAB
+    ═══════════════════════════════════ */
+    #hotspotsBoard { display: flex; flex-direction: column; gap: 6px; }
+
+    /* ═══════════════════════════════════
+       GLOBE POPUP
+    ═══════════════════════════════════ */
+    .globe-popup-wrap {
+      position: absolute; z-index: 10;
+      background: #0a0f1e; border: 1px solid var(--border2);
+      border-radius: 10px; padding: 0;
+      color: var(--text); box-shadow: 0 12px 40px rgba(0,0,0,.75);
+      min-width: 220px; max-width: 260px;
+      pointer-events: auto;
+    }
+    .globe-popup-close {
+      position: absolute; top: 8px; right: 10px;
+      background: none; border: none; color: var(--muted);
+      font-size: 16px; cursor: pointer; z-index: 1; line-height: 1;
+    }
+    .country-popup { padding: 14px; }
+    .country-popup-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+    .country-popup-title { font-size: 13px; font-weight: 700; }
+    .country-popup-badge { font-size: 9px; background: rgba(59,130,246,.15); color: var(--accent); padding: 2px 7px; border-radius: 4px; font-family: var(--mono); font-weight: 700; }
+    .country-popup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px; }
+    .country-popup-metric { background: rgba(255,255,255,.04); border-radius: 4px; padding: 6px; }
+    .country-popup-label { font-size: 8px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); display: block; font-family: var(--mono); }
+    .country-popup-value { font-size: 12px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+    .country-popup-topic { font-size: 10px; color: var(--dim); border-top: 1px solid var(--border); padding-top: 7px; }
+
+    /* ═══════════════════════════════════
+       HIDDEN
+    ═══════════════════════════════════ */
+    .hidden-inputs { display: none; }
+
+    /* ═══════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════ */
+    footer {
+      text-align: center; padding: 16px 20px; font-size: 11px;
+      color: var(--muted); border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ═══════════════════════════════════
+       SCROLLBAR
+    ═══════════════════════════════════ */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    /* ═══════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════ */
+    @media (max-width: 1140px) {
+      .app-body { grid-template-columns: 1fr; }
+      .right-col { position: static; max-height: none; }
+      .signal-bar { grid-template-columns: repeat(4,1fr); }
+      .clock-box { display: none; }
+      .world-clocks { display: none; }
+    }
+    @media (max-width: 640px) {
+      .app-body { padding: 10px 10px 30px; }
+      #globe-canvas { height: 280px; }
+      #results { grid-template-columns: 1fr; }
+      .dash-status { display: none; }
+      .signal-bar { grid-template-columns: repeat(2,1fr); }
+      .header-inner { grid-template-columns: 1fr auto; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- RETRO TICKER -->
+<div class="retro-ticker-bar">
+  <div class="retro-ticker-label">
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="white" stroke-width="1.2"/><circle cx="5" cy="5" r="1.5" fill="white"/></svg>
+    LIVE FEED
+  </div>
+  <div class="retro-ticker-scroll">
+    <div id="retroTickerTrack">
+      <span class="retro-ticker-item">GEONEWS MONITOR ONLINE</span>
+      <span class="retro-ticker-item">GLOBAL INTELLIGENCE DASHBOARD ACTIVO</span>
+      <span class="retro-ticker-item">ESPERANDO CONSULTAS Y BRIEFINGS</span>
+      <span class="retro-ticker-item">GEONEWS MONITOR ONLINE</span>
+      <span class="retro-ticker-item">GLOBAL INTELLIGENCE DASHBOARD ACTIVO</span>
+      <span class="retro-ticker-item">ESPERANDO CONSULTAS Y BRIEFINGS</span>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="header-inner">
+    <a class="logo" href="#">
+      <img src="logogeonews.png" alt="GeoNews Monitor"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+      <div class="logo-fallback" style="display:none">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="1.5"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" stroke="white" stroke-width="1.2"/></svg>
+      </div>
+      <div class="logo-textblock">
+        <span class="logo-name">Geo<em>News</em> Monitor</span>
+        <span class="logo-sub">Global Intelligence Dashboard</span>
+      </div>
+    </a>
+    <div class="dash-status">
+      <div class="dash-stat"><span class="dash-stat-label">Tema activo</span><span class="dash-stat-value" id="activeTopic">—</span></div>
+      <div class="dash-stat"><span class="dash-stat-label">Países</span><span class="dash-stat-value" id="activeCountries">0</span></div>
+      <div class="dash-stat"><span class="dash-stat-label">Titulares</span><span class="dash-stat-value" id="headlineCount">0</span></div>
+      <div class="dash-stat"><span class="dash-stat-label">Actualizado</span><span class="dash-stat-value" id="lastUpdate">—</span></div>
+    </div>
+    <div class="world-clocks">
+      <div class="clock-item"><span class="clock-city">Madrid</span><span class="clock-time" id="clockMadrid">--:--</span></div>
+      <div class="clock-item"><span class="clock-city">London</span><span class="clock-time" id="clockLondon">--:--</span></div>
+      <div class="clock-item"><span class="clock-city">N.York</span><span class="clock-time" id="clockNewYork">--:--</span></div>
+      <div class="clock-item"><span class="clock-city">Beijing</span><span class="clock-time" id="clockBeijing">--:--</span></div>
+      <div class="clock-item"><span class="clock-city">Tokyo</span><span class="clock-time" id="clockTokyo">--:--</span></div>
+      <div class="clock-item"><span class="clock-city">Moscow</span><span class="clock-time" id="clockMoscow">--:--</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- APP BODY -->
+<div class="app-body">
+
+  <!-- LEFT -->
+  <div class="left-col">
+
+    <!-- 3D Globe Map -->
+    <div class="map-wrap">
+      <div class="map-label"><div class="map-dot"></div> Globo 3D · Clic para detectar país</div>
+      <canvas id="globe-canvas"></canvas>
+    </div>
+
+    <!-- Signal Bar -->
+    <div class="signal-bar">
+      <div class="signal-item">
+        <span class="signal-label">Índice Tensión</span>
+        <span class="signal-value" id="tensionIndex">0/100</span>
+      </div>
+      <div class="signal-item">
+        <span class="signal-label">Media Mood</span>
+        <span class="signal-value" id="mediaMood">NEUTRAL</span>
+      </div>
+      <div class="signal-item">
+        <span class="signal-label">Defcon-like</span>
+        <span class="signal-value" id="defconSignal">GREEN</span>
+      </div>
+      <div class="signal-item">
+        <span class="signal-label">Narrative Bias</span>
+        <span class="signal-value" id="narrativeBias">GENERAL</span>
+      </div>
+      <div class="clock-box"><span class="clock-city">Madrid</span><span class="clock-time" id="clockMadrid2">--:--</span></div>
+      <div class="clock-box"><span class="clock-city">London</span><span class="clock-time" id="clockLondon2">--:--</span></div>
+      <div class="clock-box"><span class="clock-city">N.York</span><span class="clock-time" id="clockNewYork2">--:--</span></div>
+      <div class="clock-box"><span class="clock-city">Beijing</span><span class="clock-time" id="clockBeijing2">--:--</span></div>
+      <div class="clock-box"><span class="clock-city">Tokyo</span><span class="clock-time" id="clockTokyo2">--:--</span></div>
+      <div class="clock-box"><span class="clock-city">Moscow</span><span class="clock-time" id="clockMoscow2">--:--</span></div>
+    </div>
+
+    <!-- Results / Briefing -->
+    <div class="results-outer">
+      <div class="results-header">
+        <span class="section-label">Resultados</span>
+        <span id="resultsCount" style="font-size:11px;color:var(--muted);font-family:var(--mono);"></span>
+      </div>
+      <div id="results">
+        <div class="card">
+          <div class="summary">Usa la búsqueda o genera un briefing comparativo seleccionando países y tema en el panel derecho. Pulsa en el globo para detectar el país.</div>
+        </div>
+      </div>
+      <div id="briefingResults" style="display:none;"></div>
+    </div>
+
+  </div><!-- /left-col -->
+
+  <!-- RIGHT: TAB PANEL -->
+  <div class="right-col">
+    <div class="tab-bar">
+
+      <!-- Tab: Search -->
+      <button class="tab-btn active" onclick="switchTab('search',this)">
+        <svg class="tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="6.5" cy="6.5" r="4"/>
+          <line x1="6.5" y1="1" x2="6.5" y2="2.5"/>
+          <line x1="6.5" y1="10.5" x2="6.5" y2="12"/>
+          <line x1="1" y1="6.5" x2="2.5" y2="6.5"/>
+          <line x1="10.5" y1="6.5" x2="12" y2="6.5"/>
+          <line x1="10.5" y1="10.5" x2="15" y2="15"/>
+        </svg>
+        Búsqueda
+      </button>
+
+      <!-- Tab: Briefing -->
+      <button class="tab-btn" onclick="switchTab('briefing',this)">
+        <svg class="tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="1" y="1" width="6" height="6" rx="1"/>
+          <rect x="9" y="1" width="6" height="6" rx="1"/>
+          <rect x="1" y="9" width="6" height="6" rx="1"/>
+          <rect x="9" y="9" width="6" height="6" rx="1"/>
+        </svg>
+        Briefing
+      </button>
+
+      <!-- Tab: Signals -->
+      <button class="tab-btn" onclick="switchTab('signals',this)">
+        <svg class="tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M1 12 L4 8 L7 10 L10 5 L13 7 L15 4"/>
+          <circle cx="15" cy="4" r="1" fill="currentColor" stroke="none"/>
+        </svg>
+        Señales
+      </button>
+
+      <!-- Tab: Guía -->
+      <button class="tab-btn" onclick="switchTab('guide',this)">
+        <svg class="tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="8" r="7"/>
+          <path d="M8 7 C8 5.5 10 5 10 6.5 C10 7.5 8 8 8 9.5"/>
+          <circle cx="8" cy="11.5" r="0.8" fill="currentColor" stroke="none"/>
+        </svg>
+        Guía
+      </button>
+
+    </div>
+
+    <!-- ── SEARCH TAB ── -->
+    <div class="tab-pane active" id="tab-search">
+      <div>
+        <div class="panel-label">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4" cy="4" r="3"/><line x1="6.5" y1="6.5" x2="9" y2="9"/></svg>
+          País
+        </div>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="country" placeholder="España, Germany, Iran…" />
+          <button class="btn btn-ghost btn-sm" id="geoBtn" title="Detectar mi ubicación" style="flex-shrink:0">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6.5" cy="6.5" r="5"/><circle cx="6.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/><line x1="6.5" y1="1" x2="6.5" y2="3"/><line x1="6.5" y1="10" x2="6.5" y2="12"/><line x1="1" y1="6.5" x2="3" y2="6.5"/><line x1="10" y1="6.5" x2="12" y2="6.5"/></svg>
+          </button>
+        </div>
+      </div>
+      <div>
+        <div class="panel-label">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 8 L3 5 L5 6.5 L7 3 L9 4.5"/></svg>
+          Tema o palabras clave
+        </div>
+        <input type="text" id="query" placeholder="OTAN, energía, IA, defensa…" />
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="searchBtn">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="white" stroke-width="1.5"><circle cx="5.5" cy="5.5" r="4"/><line x1="8.5" y1="8.5" x2="12" y2="12"/></svg>
+          Buscar
+        </button>
+        <button class="btn btn-secondary" id="spinBtn">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6.5" cy="6.5" r="5"/><path d="M6.5 1.5 A5 5 0 0 1 11.5 6.5" stroke-dasharray="3 2"/></svg>
+          Girar globo
+        </button>
+      </div>
+      <div id="status">Listo.</div>
+
+      <div>
+        <div class="panel-label">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><polyline points="1,8 4,3 6,5 9,1"/></svg>
+          Mercados referencia
+        </div>
+        <div id="marketBoard"></div>
+      </div>
+
+      <div class="geo-ticker-box">
+        <div class="geo-ticker-label">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 5 Q2.5 1 5 5 Q7.5 9 9 5"/><circle cx="5" cy="5" r="1" fill="currentColor" stroke="none"/></svg>
+          Flujo geopolítico
+        </div>
+        <div id="geoTicker">
+          <span class="ticker-item">Panel global iniciado.</span>
+          <span class="ticker-item">Esperando tema para briefing.</span>
+          <span class="ticker-item">Mapa 3D operativo.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BRIEFING TAB ── -->
+    <div class="tab-pane" id="tab-briefing">
+
+      <!-- Topic -->
+      <div>
+        <div class="panel-label">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><polygon points="5,1 9,8 1,8"/></svg>
+          Tema del briefing
+        </div>
+        <input type="text" id="briefTopicVisual" placeholder="OTAN, energía, IA, conflicto…" />
+        <div class="topic-chips" id="topicChips">
+
+          <button class="topic-chip" data-topic="otan">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5.5 1 L9.5 3.5 L9.5 7.5 L5.5 10 L1.5 7.5 L1.5 3.5 Z"/><circle cx="5.5" cy="5.5" r="1.5"/></svg>
+            OTAN
+          </button>
+
+          <button class="topic-chip" data-topic="energia">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><polyline points="6,1 3,6 6,6 5,10 8,5 5,5"/></svg>
+            Energía
+          </button>
+
+          <button class="topic-chip" data-topic="ia">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="5.5" cy="5.5" r="2"/><line x1="5.5" y1="1" x2="5.5" y2="3.5"/><line x1="5.5" y1="7.5" x2="5.5" y2="10"/><line x1="1" y1="5.5" x2="3.5" y2="5.5"/><line x1="7.5" y1="5.5" x2="10" y2="5.5"/></svg>
+            IA
+          </button>
+
+          <button class="topic-chip" data-topic="ciberseguridad">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="5" width="6" height="5" rx="1"/><path d="M4 5 V3 a1.5 1.5 0 0 1 3 0 V5"/></svg>
+            Ciber
+          </button>
+
+          <button class="topic-chip" data-topic="defensa">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="5.5" cy="5.5" r="4"/><circle cx="5.5" cy="5.5" r="1.5"/><line x1="5.5" y1="1.5" x2="5.5" y2="2.5"/><line x1="5.5" y1="8.5" x2="5.5" y2="9.5"/><line x1="1.5" y1="5.5" x2="2.5" y2="5.5"/><line x1="8.5" y1="5.5" x2="9.5" y2="5.5"/></svg>
+            Defensa
+          </button>
+
+          <button class="topic-chip" data-topic="economia">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><polyline points="1,9 3.5,5 5.5,7 8,3 10,4"/><line x1="1" y1="9" x2="10" y2="9"/></svg>
+            Economía
+          </button>
+
+          <button class="topic-chip" data-topic="china">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="5.5" cy="5.5" r="4"/><path d="M3 5.5 Q5.5 3 8 5.5 Q5.5 8 3 5.5"/></svg>
+            China
+          </button>
+
+          <button class="topic-chip" data-topic="rusia">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><polygon points="5.5,1.5 7,4.5 10.5,5 8,7.5 8.5,10.5 5.5,9 2.5,10.5 3,7.5 0.5,5 4,4.5"/></svg>
+            Rusia
+          </button>
+
+          <button class="topic-chip" data-topic="migracion">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="3.5" cy="3" r="1.5"/><path d="M1 10 Q1 7 3.5 7 Q5 7 6 8"/><line x1="7" y1="5" x2="10.5" y2="5"/><polyline points="8.5,3 10.5,5 8.5,7"/></svg>
+            Migración
+          </button>
+
+          <button class="topic-chip" data-topic="clima">
+            <svg viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 8 Q2 5 5 5 Q5 3 7.5 3 Q10 3 10 5.5 Q10 8 8 8"/><line x1="2" y1="8" x2="8" y2="8"/></svg>
+            Clima
+          </button>
+
+        </div>
+      </div>
+
+      <!-- Country selector -->
+      <div>
+        <div class="panel-label" style="justify-content:space-between">
+          <span style="display:flex;align-items:center;gap:6px">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="4" height="4" rx=".5"/><rect x="5" y="1" width="4" height="4" rx=".5"/><rect x="1" y="5" width="4" height="4" rx=".5"/><rect x="5" y="5" width="4" height="4" rx=".5"/></svg>
+            Países a comparar
+          </span>
+          <span style="color:var(--accent2);font-weight:700;font-size:9px">selección múltiple</span>
+        </div>
+
+        <!-- Selected tags -->
+        <div class="selected-countries" id="selectedCountriesTags">
+          <span class="selected-placeholder">Ningún país seleccionado</span>
+        </div>
+
+        <!-- Country chips by region -->
+        <div class="country-selector" style="margin-top:10px;">
+
+          <div>
+            <div class="region-label">Europa</div>
+            <div class="country-chips">
+              <button class="country-chip" data-key="espana"><span class="fi fi-es"></span>España</button>
+              <button class="country-chip" data-key="portugal"><span class="fi fi-pt"></span>Portugal</button>
+              <button class="country-chip" data-key="france"><span class="fi fi-fr"></span>Francia</button>
+              <button class="country-chip" data-key="alemania"><span class="fi fi-de"></span>Alemania</button>
+              <button class="country-chip" data-key="italia"><span class="fi fi-it"></span>Italia</button>
+              <button class="country-chip" data-key="uk"><span class="fi fi-gb"></span>UK</button>
+              <button class="country-chip" data-key="belgica"><span class="fi fi-be"></span>Bélgica</button>
+              <button class="country-chip" data-key="netherlands"><span class="fi fi-nl"></span>P.Bajos</button>
+              <button class="country-chip" data-key="suecia"><span class="fi fi-se"></span>Suecia</button>
+              <button class="country-chip" data-key="noruega"><span class="fi fi-no"></span>Noruega</button>
+              <button class="country-chip" data-key="dinamarca"><span class="fi fi-dk"></span>Dinamarca</button>
+              <button class="country-chip" data-key="finlandia"><span class="fi fi-fi"></span>Finlandia</button>
+              <button class="country-chip" data-key="polonia"><span class="fi fi-pl"></span>Polonia</button>
+              <button class="country-chip" data-key="chequia"><span class="fi fi-cz"></span>Chequia</button>
+              <button class="country-chip" data-key="hungria"><span class="fi fi-hu"></span>Hungría</button>
+              <button class="country-chip" data-key="rumania"><span class="fi fi-ro"></span>Rumanía</button>
+              <button class="country-chip" data-key="grecia"><span class="fi fi-gr"></span>Grecia</button>
+              <button class="country-chip" data-key="austria"><span class="fi fi-at"></span>Austria</button>
+              <button class="country-chip" data-key="suiza"><span class="fi fi-ch"></span>Suiza</button>
+              <button class="country-chip" data-key="irlanda"><span class="fi fi-ie"></span>Irlanda</button>
+              <button class="country-chip" data-key="ucrania"><span class="fi fi-ua"></span>Ucrania</button>
+              <button class="country-chip" data-key="turquia"><span class="fi fi-tr"></span>Turquía</button>
+              <button class="country-chip" data-key="rusia"><span class="fi fi-ru"></span>Rusia</button>
+              <button class="country-chip" data-key="serbia"><span class="fi fi-rs"></span>Serbia</button>
+              <button class="country-chip" data-key="bielorusia"><span class="fi fi-by"></span>Bielorrusia</button>
+              <button class="country-chip" data-key="moldavia"><span class="fi fi-md"></span>Moldavia</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="region-label">Américas</div>
+            <div class="country-chips">
+              <button class="country-chip" data-key="usa"><span class="fi fi-us"></span>EE.UU.</button>
+              <button class="country-chip" data-key="canada"><span class="fi fi-ca"></span>Canadá</button>
+              <button class="country-chip" data-key="mexico"><span class="fi fi-mx"></span>México</button>
+              <button class="country-chip" data-key="colombia"><span class="fi fi-co"></span>Colombia</button>
+              <button class="country-chip" data-key="venezuela"><span class="fi fi-ve"></span>Venezuela</button>
+              <button class="country-chip" data-key="argentina"><span class="fi fi-ar"></span>Argentina</button>
+              <button class="country-chip" data-key="chile"><span class="fi fi-cl"></span>Chile</button>
+              <button class="country-chip" data-key="peru"><span class="fi fi-pe"></span>Perú</button>
+              <button class="country-chip" data-key="brasil"><span class="fi fi-br"></span>Brasil</button>
+              <button class="country-chip" data-key="cuba"><span class="fi fi-cu"></span>Cuba</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="region-label">Asia-Pacífico</div>
+            <div class="country-chips">
+              <button class="country-chip" data-key="china"><span class="fi fi-cn"></span>China</button>
+              <button class="country-chip" data-key="japon"><span class="fi fi-jp"></span>Japón</button>
+              <button class="country-chip" data-key="india"><span class="fi fi-in"></span>India</button>
+              <button class="country-chip" data-key="corea del sur"><span class="fi fi-kr"></span>S.Korea</button>
+              <button class="country-chip" data-key="corea del norte"><span class="fi fi-kp"></span>N.Korea</button>
+              <button class="country-chip" data-key="taiwan"><span class="fi fi-tw"></span>Taiwan</button>
+              <button class="country-chip" data-key="indonesia"><span class="fi fi-id"></span>Indonesia</button>
+              <button class="country-chip" data-key="singapur"><span class="fi fi-sg"></span>Singapur</button>
+              <button class="country-chip" data-key="tailandia"><span class="fi fi-th"></span>Tailandia</button>
+              <button class="country-chip" data-key="vietnam"><span class="fi fi-vn"></span>Vietnam</button>
+              <button class="country-chip" data-key="australia"><span class="fi fi-au"></span>Australia</button>
+              <button class="country-chip" data-key="pakistan"><span class="fi fi-pk"></span>Pakistán</button>
+              <button class="country-chip" data-key="myanmar"><span class="fi fi-mm"></span>Myanmar</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="region-label">Oriente Medio</div>
+            <div class="country-chips">
+              <button class="country-chip" data-key="israel"><span class="fi fi-il"></span>Israel</button>
+              <button class="country-chip" data-key="iran"><span class="fi fi-ir"></span>Irán</button>
+              <button class="country-chip" data-key="arabia saudita"><span class="fi fi-sa"></span>Arabia S.</button>
+              <button class="country-chip" data-key="uae"><span class="fi fi-ae"></span>UAE</button>
+              <button class="country-chip" data-key="qatar"><span class="fi fi-qa"></span>Qatar</button>
+              <button class="country-chip" data-key="jordania"><span class="fi fi-jo"></span>Jordania</button>
+              <button class="country-chip" data-key="libano"><span class="fi fi-lb"></span>Líbano</button>
+              <button class="country-chip" data-key="siria"><span class="fi fi-sy"></span>Siria</button>
+              <button class="country-chip" data-key="irak"><span class="fi fi-iq"></span>Iraq</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="region-label">África</div>
+            <div class="country-chips">
+              <button class="country-chip" data-key="egipto"><span class="fi fi-eg"></span>Egipto</button>
+              <button class="country-chip" data-key="marruecos"><span class="fi fi-ma"></span>Marruecos</button>
+              <button class="country-chip" data-key="argelia"><span class="fi fi-dz"></span>Argelia</button>
+              <button class="country-chip" data-key="tunez"><span class="fi fi-tn"></span>Túnez</button>
+              <button class="country-chip" data-key="nigeria"><span class="fi fi-ng"></span>Nigeria</button>
+              <button class="country-chip" data-key="etiopia"><span class="fi fi-et"></span>Etiopía</button>
+              <button class="country-chip" data-key="kenia"><span class="fi fi-ke"></span>Kenia</button>
+              <button class="country-chip" data-key="sudafrica"><span class="fi fi-za"></span>S.África</button>
+              <button class="country-chip" data-key="libia"><span class="fi fi-ly"></span>Libia</button>
+              <button class="country-chip" data-key="senegal"><span class="fi fi-sn"></span>Senegal</button>
+              <button class="country-chip" data-key="ghana"><span class="fi fi-gh"></span>Ghana</button>
+              <button class="country-chip" data-key="mali"><span class="fi fi-ml"></span>Mali</button>
+              <button class="country-chip" data-key="niger"><span class="fi fi-ne"></span>Níger</button>
+              <button class="country-chip" data-key="sudan"><span class="fi fi-sd"></span>Sudán</button>
+              <button class="country-chip" data-key="somalia"><span class="fi fi-so"></span>Somalia</button>
+              <button class="country-chip" data-key="angola"><span class="fi fi-ao"></span>Angola</button>
+              <button class="country-chip" data-key="mozambique"><span class="fi fi-mz"></span>Mozambique</button>
+              <button class="country-chip" data-key="tanzania"><span class="fi fi-tz"></span>Tanzania</button>
+              <button class="country-chip" data-key="rwanda"><span class="fi fi-rw"></span>Rwanda</button>
+              <button class="country-chip" data-key="congo"><span class="fi fi-cd"></span>Congo RDC</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="region-label">Europa — Bálticos &amp; Balcanes</div>
+            <div class="country-chips">
+              <button class="country-chip" data-key="lituania"><span class="fi fi-lt"></span>Lituania</button>
+              <button class="country-chip" data-key="letonia"><span class="fi fi-lv"></span>Letonia</button>
+              <button class="country-chip" data-key="estonia"><span class="fi fi-ee"></span>Estonia</button>
+              <button class="country-chip" data-key="bosnia"><span class="fi fi-ba"></span>Bosnia</button>
+              <button class="country-chip" data-key="montenegro"><span class="fi fi-me"></span>Montenegro</button>
+              <button class="country-chip" data-key="macedonia del norte"><span class="fi fi-mk"></span>Macedonia N.</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="region-label">Centroamérica &amp; Cono Sur</div>
+            <div class="country-chips">
+              <button class="country-chip" data-key="guatemala"><span class="fi fi-gt"></span>Guatemala</button>
+              <button class="country-chip" data-key="costa rica"><span class="fi fi-cr"></span>Costa Rica</button>
+              <button class="country-chip" data-key="panama"><span class="fi fi-pa"></span>Panamá</button>
+              <button class="country-chip" data-key="honduras"><span class="fi fi-hn"></span>Honduras</button>
+              <button class="country-chip" data-key="el salvador"><span class="fi fi-sv"></span>El Salvador</button>
+              <button class="country-chip" data-key="nicaragua"><span class="fi fi-ni"></span>Nicaragua</button>
+              <button class="country-chip" data-key="ecuador"><span class="fi fi-ec"></span>Ecuador</button>
+              <button class="country-chip" data-key="bolivia"><span class="fi fi-bo"></span>Bolivia</button>
+              <button class="country-chip" data-key="uruguay"><span class="fi fi-uy"></span>Uruguay</button>
+              <button class="country-chip" data-key="paraguay"><span class="fi fi-py"></span>Paraguay</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="region-label">Asia Central &amp; Cáucaso</div>
+            <div class="country-chips">
+              <button class="country-chip" data-key="kazajistan"><span class="fi fi-kz"></span>Kazajistán</button>
+              <button class="country-chip" data-key="uzbekistan"><span class="fi fi-uz"></span>Uzbekistán</button>
+              <button class="country-chip" data-key="azerbaiyan"><span class="fi fi-az"></span>Azerbaiyán</button>
+              <button class="country-chip" data-key="georgia"><span class="fi fi-ge"></span>Georgia</button>
+              <button class="country-chip" data-key="armenia"><span class="fi fi-am"></span>Armenia</button>
+              <button class="country-chip" data-key="mongolia"><span class="fi fi-mn"></span>Mongolia</button>
+              <button class="country-chip" data-key="afghanistan"><span class="fi fi-af"></span>Afganistán</button>
+            </div>
+          </div>
+
+          <div>
+            <div class="region-label">Oriente Medio Extendido</div>
+            <div class="country-chips">
+              <button class="country-chip" data-key="kuwait"><span class="fi fi-kw"></span>Kuwait</button>
+              <button class="country-chip" data-key="bahrain"><span class="fi fi-bh"></span>Bahréin</button>
+              <button class="country-chip" data-key="oman"><span class="fi fi-om"></span>Omán</button>
+              <button class="country-chip" data-key="yemen"><span class="fi fi-ye"></span>Yemen</button>
+              <button class="country-chip" data-key="bangladesh"><span class="fi fi-bd"></span>Bangladesh</button>
+              <button class="country-chip" data-key="sri lanka"><span class="fi fi-lk"></span>Sri Lanka</button>
+              <button class="country-chip" data-key="nepal"><span class="fi fi-np"></span>Nepal</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Run -->
+      <div class="brief-run-row">
+        <button class="btn btn-primary" onclick="runBriefing()">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="white" stroke-width="1.5"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="7" y="1" width="5" height="5" rx="1"/><rect x="1" y="7" width="5" height="5" rx="1"/><rect x="7" y="7" width="5" height="5" rx="1"/></svg>
+          Analizar y comparar
+        </button>
+        <button class="btn btn-danger btn-sm" id="clearBriefBtn" title="Limpiar">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
+        </button>
+      </div>
+
+      <div id="briefStatus">Selecciona tema y al menos 2 países para comparar.</div>
+
+      <div class="hidden-inputs">
+        <input type="text" id="briefTopic" />
+        <input type="text" id="briefCountries" />
+        <button id="briefBtn" style="display:none"></button>
+      </div>
+    </div>
+
+    <!-- ── SIGNALS TAB ── -->
+    <div class="tab-pane" id="tab-signals">
+      <div>
+        <div class="panel-label">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><polygon points="5,1 6.5,4 10,4.5 7.5,7 8,10 5,8.5 2,10 2.5,7 0,4.5 3.5,4"/></svg>
+          Hotspots de cobertura
+        </div>
+        <div id="hotspotsBoard">
+          <div class="hud-metric"><span class="hud-label">Sin datos</span><span class="hud-value">—</span></div>
+        </div>
+      </div>
+      <div class="geo-ticker-box">
+        <div class="geo-ticker-label">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 5 Q2.5 1 5 5 Q7.5 9 9 5"/><circle cx="5" cy="5" r="1" fill="currentColor" stroke="none"/></svg>
+          Flujo en tiempo real
+        </div>
+        <div id="geoTicker" style="display:none"></div>
+        <div id="geoTickerSignals" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- ── GUIDE TAB ── -->
+    <div class="tab-pane" id="tab-guide">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#0f1525,#131a2e);border:1px solid var(--border2);border-radius:var(--r);padding:14px 16px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.5"><circle cx="8" cy="8" r="7"/><path d="M8 7 C8 5.5 10 5 10 6.5 C10 7.5 8 8 8 9.5"/><circle cx="8" cy="11.5" r="0.8" fill="var(--accent)" stroke="none"/></svg>
+          <span style="font-size:11px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);">Cómo usar GeoNews Monitor</span>
+        </div>
+        <p style="font-size:11px;color:var(--dim);line-height:1.6;">Monitor de inteligencia geopolítica de fuentes abiertas. Combina RSS de medios internacionales con análisis por país, tema y señales de riesgo.</p>
+      </div>
+
+      <!-- Sección: Pestaña Búsqueda -->
+      <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;">
+        <div style="background:var(--card2);padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" stroke-width="1.4"><circle cx="4" cy="4" r="3"/><line x1="6.5" y1="6.5" x2="9" y2="9"/></svg>
+          <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);font-family:var(--mono);">Pestaña Búsqueda</span>
+        </div>
+        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px;">
+
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <span style="font-size:10px;font-weight:700;color:var(--text);">Campo País</span>
+            <p style="font-size:11px;color:var(--dim);line-height:1.6;">Escribe el nombre del país en español o inglés. Ejemplos: <code style="background:var(--card2);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10px;color:var(--accent3);">España</code>, <code style="background:var(--card2);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10px;color:var(--accent3);">China</code>, <code style="background:var(--card2);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10px;color:var(--accent3);">Brazil</code>. También puedes usar el botón <strong style="color:var(--text);">⟳ Aleatorio</strong> para explorar un país sorpresa.</p>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <span style="font-size:10px;font-weight:700;color:var(--text);">Campo Tema (opcional)</span>
+            <p style="font-size:11px;color:var(--dim);line-height:1.6;">Filtra las noticias del país por tema. Puedes usar los temas predefinidos o cualquier palabra libre:</p>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;">
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">ia</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">energía</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">otan</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">ciberseguridad</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">defensa</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">china</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">rusia</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">economía</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">migración</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">clima</span>
+              <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:3px 7px;border-radius:4px;">conflicto</span>
+            </div>
+            <p style="font-size:10px;color:var(--muted);margin-top:4px;">También funciona cualquier texto libre: <code style="background:var(--card2);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10px;color:var(--accent3);">sanciones</code>, <code style="background:var(--card2);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10px;color:var(--accent3);">elecciones</code>, <code style="background:var(--card2);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:10px;color:var(--accent3);">terremotos</code>…</p>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <span style="font-size:10px;font-weight:700;color:var(--text);">Selector de países rápido</span>
+            <p style="font-size:11px;color:var(--dim);line-height:1.6;">Usa el panel de banderas para seleccionar países con un clic. Al pulsar <strong style="color:var(--text);">Buscar</strong> se lanza la consulta sobre todos los seleccionados a la vez.</p>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Sección: Pestaña Briefing -->
+      <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;">
+        <div style="background:var(--card2);padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#7c3aed" stroke-width="1.4"><rect x="1" y="1" width="3.5" height="3.5" rx="0.5"/><rect x="5.5" y="1" width="3.5" height="3.5" rx="0.5"/><rect x="1" y="5.5" width="3.5" height="3.5" rx="0.5"/><rect x="5.5" y="5.5" width="3.5" height="3.5" rx="0.5"/></svg>
+          <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#7c3aed;font-family:var(--mono);">Pestaña Briefing</span>
+        </div>
+        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px;">
+          <p style="font-size:11px;color:var(--dim);line-height:1.6;">Compara cómo cubren un mismo tema varios países simultáneamente. Ideal para detectar diferencias de narrativa entre medios nacionales.</p>
+          <div style="background:var(--card2);border-left:2px solid #7c3aed;padding:8px 10px;border-radius:0 4px 4px 0;">
+            <p style="font-size:10px;color:var(--dim);line-height:1.6;"><strong style="color:var(--text);">Ejemplo:</strong> Tema <code style="font-family:var(--mono);color:var(--accent3);">otan</code> + países <code style="font-family:var(--mono);color:var(--accent3);">spain, germany, russia, turkey_tr</code> — verás cómo cada medio nacional enfoca la misma noticia.</p>
+          </div>
+          <p style="font-size:10px;color:var(--muted);">Separa los países con comas. Usa las claves internas: <code style="font-family:var(--mono);font-size:9px;color:var(--accent3);">spain</code>, <code style="font-family:var(--mono);font-size:9px;color:var(--accent3);">france</code>, <code style="font-family:var(--mono);font-size:9px;color:var(--accent3);">china</code>, <code style="font-family:var(--mono);font-size:9px;color:var(--accent3);">iran</code>, <code style="font-family:var(--mono);font-size:9px;color:var(--accent3);">brazil</code>, <code style="font-family:var(--mono);font-size:9px;color:var(--accent3);">india</code>…</p>
+        </div>
+      </div>
+
+      <!-- Sección: Pestaña Señales -->
+      <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;">
+        <div style="background:var(--card2);padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--green)" stroke-width="1.3"><path d="M1 7 L3 4.5 L5 5.5 L7 2.5 L9 3.5"/><circle cx="9" cy="3.5" r="0.8" fill="var(--green)" stroke="none"/></svg>
+          <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-family:var(--mono);">Pestaña Señales</span>
+        </div>
+        <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px;">
+          <p style="font-size:11px;color:var(--dim);line-height:1.6;">Vista de inteligencia global: hotspots de cobertura mediática, flujo de noticias en tiempo real y métricas de tensión geopolítica.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div style="background:var(--card2);padding:8px;border-radius:4px;border:1px solid var(--border);">
+              <div style="font-size:9px;font-weight:700;color:var(--green);font-family:var(--mono);margin-bottom:3px;">TENSION INDEX</div>
+              <div style="font-size:10px;color:var(--dim);">Estimación de nivel de conflictividad global basada en el volumen de noticias de alerta.</div>
+            </div>
+            <div style="background:var(--card2);padding:8px;border-radius:4px;border:1px solid var(--border);">
+              <div style="font-size:9px;font-weight:700;color:var(--amber);font-family:var(--mono);margin-bottom:3px;">MEDIA MOOD</div>
+              <div style="font-size:10px;color:var(--dim);">Tono predominante de los titulares internacionales en el ciclo actual.</div>
+            </div>
+            <div style="background:var(--card2);padding:8px;border-radius:4px;border:1px solid var(--border);">
+              <div style="font-size:9px;font-weight:700;color:var(--red);font-family:var(--mono);margin-bottom:3px;">DEFCON SIGNAL</div>
+              <div style="font-size:10px;color:var(--dim);">Indicador visual de nivel de alerta geopolítica inferido del contenido de los feeds.</div>
+            </div>
+            <div style="background:var(--card2);padding:8px;border-radius:4px;border:1px solid var(--border);">
+              <div style="font-size:9px;font-weight:700;color:var(--accent3);font-family:var(--mono);margin-bottom:3px;">NARRATIVE BIAS</div>
+              <div style="font-size:10px;color:var(--dim);">Detecta hacia qué región o actor se concentra la cobertura mediática global.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección: Países disponibles -->
+      <div style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden;">
+        <div style="background:var(--card2);padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent3)" stroke-width="1.3"><circle cx="5" cy="5" r="4"/><path d="M5 1 C3.5 2.5 3 3.5 3 5 C3 6.5 3.5 7.5 5 9 C6.5 7.5 7 6.5 7 5 C7 3.5 6.5 2.5 5 1Z"/><line x1="1" y1="5" x2="9" y2="5"/></svg>
+          <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent3);font-family:var(--mono);">Países con fuentes propias</span>
+        </div>
+        <div style="padding:12px 14px;">
+          <p style="font-size:10px;color:var(--muted);margin-bottom:8px;">Estos países tienen feeds RSS directos configurados. Para el resto se activa el fallback de Google News.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;">
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇪🇸 Spain</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇵🇹 Portugal</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇫🇷 France</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇩🇪 Germany</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇮🇹 Italy</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇬🇧 UK</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇳🇱 Netherlands</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇲🇽 México</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇦🇷 Argentina</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇧🇷 Brasil</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇨🇴 Colombia</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇨🇱 Chile</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇵🇪 Perú</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇻🇪 Venezuela</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇨🇳 China</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇯🇵 Japan</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇮🇳 India</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇰🇷 South Korea</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇦🇺 Australia</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇮🇩 Indonesia</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇮🇱 Israel</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇮🇷 Iran</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇸🇦 Saudi Arabia</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇹🇷 Türkiye</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇪🇬 Egypt</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇿🇦 South Africa</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇳🇬 Nigeria</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇲🇦 Morocco</span>
+            <span style="background:var(--card2);border:1px solid var(--border2);color:var(--dim);font-size:9px;padding:2px 7px;border-radius:3px;font-family:var(--mono);">🇰🇪 Kenya</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tip final -->
+      <div style="background:var(--card2);border:1px solid var(--border2);border-left:3px solid var(--accent);border-radius:0 var(--r) var(--r) 0;padding:10px 14px;">
+        <p style="font-size:10px;color:var(--dim);line-height:1.6;">
+          <strong style="color:var(--text);">Tip:</strong> Si no aparecen resultados para un país poco conocido, el sistema activa automáticamente Google News como respaldo. Los artículos que ves siempre son recientes.
+        </p>
+      </div>
+
+    </div>
+
+  </div><!-- /right-col -->
+</div>
+
+<footer>
+  GeoNews Monitor &middot; Inteligencia de fuentes abiertas &middot;
+  <a href="https://www.davidguardo.com" target="_blank" rel="noopener">davidguardo.com</a>
+</footer>
+
+<!-- BRIDGE SCRIPT -->
+<script>
+  /* ── Tab switching ── */
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  /* ── Country selection state ── */
+  let _sel = [];
+
+  function renderSelectedTags() {
+    const c = document.getElementById('selectedCountriesTags');
+    if (!_sel.length) { c.innerHTML = '<span class="selected-placeholder">Ningún país seleccionado</span>'; return; }
+    c.innerHTML = _sel.map(key => {
+      const chip = document.querySelector(`.country-chip[data-key="${CSS.escape(key)}"]`);
+      const flagEl = chip ? (chip.querySelector('.fi') || chip.querySelector('img')) : null;
+      const flag = flagEl ? flagEl.outerHTML : '';
+      const label = chip ? chip.textContent.trim() : key;
+      return `<span class="selected-tag">${flag} ${label}<button class="selected-tag-remove" onclick="removeSel('${key.replace(/'/g,"\\'")}')" title="Quitar">&times;</button></span>`;
+    }).join('');
+  }
+
+  function removeSel(key) {
+    _sel = _sel.filter(k => k !== key);
+    const chip = document.querySelector(`.country-chip[data-key="${CSS.escape(key)}"]`);
+    if (chip) chip.classList.remove('selected');
+    renderSelectedTags();
+  }
+
+  document.querySelectorAll('.country-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const key = chip.dataset.key;
+      if (_sel.includes(key)) {
+        _sel = _sel.filter(k => k !== key);
+        chip.classList.remove('selected');
+      } else {
+        if (_sel.length >= 8) { document.getElementById('briefStatus').textContent = 'Máximo 8 países por briefing.'; return; }
+        _sel.push(key);
+        chip.classList.add('selected');
+      }
+      renderSelectedTags();
+    });
+  });
+
+  /* ── Topic chips ── */
+  let _topic = '';
+  document.querySelectorAll('.topic-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      if (_topic === chip.dataset.topic) {
+        _topic = '';
+        chip.classList.remove('selected');
+        document.getElementById('briefTopicVisual').value = '';
+      } else {
+        document.querySelectorAll('.topic-chip').forEach(c => c.classList.remove('selected'));
+        _topic = chip.dataset.topic;
+        chip.classList.add('selected');
+        document.getElementById('briefTopicVisual').value = _topic;
+      }
+    });
+  });
+
+  document.getElementById('briefTopicVisual').addEventListener('input', function() {
+    _topic = this.value.trim();
+    document.querySelectorAll('.topic-chip').forEach(c => {
+      c.classList.toggle('selected', c.dataset.topic === _topic.toLowerCase());
+    });
+  });
+
+  /* ── runBriefing ── */
+  function runBriefing() {
+    const topic = document.getElementById('briefTopicVisual').value.trim();
+    const status = document.getElementById('briefStatus');
+    if (!topic) { status.textContent = 'Escribe o selecciona un tema primero.'; status.className = 'running'; return; }
+    if (_sel.length < 2) { status.textContent = 'Selecciona al menos 2 países para comparar.'; status.className = 'running'; return; }
+
+    document.getElementById('briefTopic').value = topic;
+    document.getElementById('briefCountries').value = _sel.join(', ');
+
+    // Show briefing panel
+    document.getElementById('results').style.display = 'none';
+    const bd = document.getElementById('briefingResults');
+    bd.style.display = 'flex';
+    bd.innerHTML = '';
+
+    // Scroll to results
+    document.querySelector('.results-outer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    status.className = 'running';
+    if (typeof generateBriefing === 'function') generateBriefing();
+  }
+
+  /* ── Secondary clock sync ── */
+  const _clkPairs = [
+    ['clockMadrid','clockMadrid2'],['clockLondon','clockLondon2'],
+    ['clockNewYork','clockNewYork2'],['clockBeijing','clockBeijing2'],
+    ['clockTokyo','clockTokyo2'],['clockMoscow','clockMoscow2']
+  ];
+  setInterval(() => {
+    _clkPairs.forEach(([a,b]) => {
+      const ea = document.getElementById(a), eb = document.getElementById(b);
+      if (ea && eb) eb.textContent = ea.textContent;
+    });
+  }, 1000);
+
+  /* ── Watch results so briefing/search don't overlap ── */
+  new MutationObserver(() => {
+    const r = document.getElementById('results');
+    if (r && r.children.length) {
+      r.style.display = 'grid';
+      document.getElementById('briefingResults').style.display = 'none';
+    }
+  }).observe(document.getElementById('results'), { childList: true });
+
+  /* ── Mirror geo ticker to signals tab ── */
+  new MutationObserver(() => {
+    const src = document.getElementById('geoTicker');
+    const dst = document.getElementById('geoTickerSignals');
+    if (src && dst) dst.innerHTML = src.innerHTML;
+  }).observe(document.getElementById('geoTicker'), { childList: true, subtree: true });
+</script>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,3 +1,13 @@
 name = "news-globe-worker"
 main = "worker.js"
 compatibility_date = "2026-04-08"
+
+# ── Cron Trigger: ingesta cada 20 minutos ──────────────────────────────────
+[triggers]
+crons = ["*/20 * * * *"]
+
+# ── D1 Database binding ────────────────────────────────────────────────────
+[[d1_databases]]
+binding       = "DB"
+database_name = "geonews-db"
+database_id   = "cf9251dd-6398-4f5d-b6f5-c8a7c4712cd5"
