@@ -436,6 +436,14 @@ const negativeKeywords = [
   "epidemia", "epidemic", "pandemia", "pandemic", "brote", "outbreak",
   "hambruna", "famine", "desplazados", "displaced", "refugiados", "refugees",
   "contaminación", "contamination", "vertido", "spill", "catástrofe",
+  // Crisis energética y suministros
+  "apagón", "apagon", "blackout", "power outage", "power cut",
+  "cortes de energía", "cortes de luz", "corte de suministro",
+  "déficit energético", "energy deficit", "energy shortage",
+  "racionamiento", "rationing", "desabastecimiento energético",
+  "crisis energética", "energy crisis", "crisis eléctrica",
+  "alza de precios", "price spike", "subida de precios",
+  "sequía severa", "severe drought", "ola de calor extrema",
   // Escándalos e inestabilidad
   "escándalo", "scandal", "corrupcion", "corruption", "fraude", "fraud",
   "manipulación", "manipulacion", "desinformacion", "disinformation",
@@ -1216,7 +1224,25 @@ function inferCountryAnalysis(country, items, topic) {
     tone = "lectura internacional";
   }
 
-  return `En ${country}, el tema "${topic}" aparece con ${angle}, un ${tone} y énfasis en ${emphasis}.`;
+  // Calcular sentimiento real de los artículos
+  const mood = detectMediaMood(items);
+  const tension = calculateTensionIndex(items);
+
+  const moodLabel = {
+    'MUY NEG ▼▼': 'valoración muy negativa',
+    'NEGATIVO ▼':  'valoración negativa',
+    'TENSO ↘':     'tono tenso',
+    'NEUTRAL →':   'tono neutral',
+    'ESTABLE ↗':   'tono estable',
+    'POSITIVO ▲':  'valoración positiva',
+    'MUY POS ▲▲':  'valoración muy positiva',
+    'SIN DATOS':   'datos insuficientes para valorar'
+  }[mood] || 'tono neutro';
+
+  const tensionLabel = tension >= 60 ? `, índice de tensión alto (${tension}/100)` :
+                       tension >= 35 ? `, tensión moderada (${tension}/100)` : '';
+
+  return `En ${country}, el tema "${topic}" aparece con ${angle}, un ${tone} y énfasis en ${emphasis}. ${moodLabel.charAt(0).toUpperCase() + moodLabel.slice(1)}${tensionLabel}.`;
 }
 
 function buildStructuredBriefing(topic, groups) {
