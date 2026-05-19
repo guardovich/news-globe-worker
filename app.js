@@ -437,7 +437,7 @@ const positiveKeywords = [
   "reconciliacion", "reconciliation", "acercamiento",
   // Economía positiva
   "crece", "crecimiento", "growth", "expansion", "expande", "auge",
-  "record", "récord", "maximo", "máximo", "all-time high", "boom",
+  "máximo histórico", "all-time high", "boom",
   "inversion", "inversión", "investment", "financiacion", "funding",
   "empleo", "employment", "jobs", "trabajo", "pleno empleo",
   "exportaciones", "exports", "surplus", "superávit", "beneficios",
@@ -1612,10 +1612,22 @@ const _NEGATIONS = [
   "fails to", "fracasa", "rechaza", "niega", "descarta", "evita", "excluye"
 ];
 
+/* Comprueba si 'word' aparece como palabra completa en 'text' */
+function _matchWord(text, word) {
+  // Para palabras cortas (<=3 chars) o con espacios usamos includes directo
+  if (word.length <= 3 || word.includes(" ")) return text.includes(word);
+  // Para el resto usamos regex con límite de palabra (funciona bien en ASCII)
+  try {
+    return new RegExp("(?<![a-záéíóúüñ])" + word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-záéíóúüñ])", "i").test(text);
+  } catch {
+    return text.includes(word);
+  }
+}
+
 function _hasNearContext(text, word, patterns) {
   const idx = text.indexOf(word);
   if (idx < 0) return false;
-  const before = text.substring(Math.max(0, idx - 28), idx);
+  const before = text.substring(Math.max(0, idx - 50), idx);
   return patterns.some(p => before.includes(p));
 }
 
@@ -1629,16 +1641,16 @@ function scoreSentiment(items = []) {
 
     const scoreText = (text, titleWeight) => {
       const intensified = _INTENSIFIERS.some(i => text.includes(i));
-      const mult = intensified ? 1.85 : 1.0;
+      const mult = intensified ? 1.35 : 1.0;
 
       positiveKeywords.forEach(word => {
-        if (text.includes(word)) {
+        if (_matchWord(text, word)) {
           const neg = _hasNearContext(text, word, _NEGATIONS) ? -0.4 : 1;
           positiveWeight += titleWeight * mult * neg;
         }
       });
       negativeKeywords.forEach(word => {
-        if (text.includes(word)) {
+        if (_matchWord(text, word)) {
           const neg = _hasNearContext(text, word, _NEGATIONS) ? -0.4 : 1;
           negativeWeight += titleWeight * mult * neg;
         }
@@ -1658,15 +1670,16 @@ function detectMediaMood(items = []) {
   if (!items.length) return 'NEUTRAL';
   const { positiveWeight, negativeWeight } = scoreSentiment(items);
   const total = positiveWeight + negativeWeight;
-  if (total < 0.5) return 'NEUTRAL';
-  const ratio = (positiveWeight - negativeWeight) / (total + 1);
+  if (total < 1.0) return 'NEUTRAL →';
+  // Normalización suavizada: divide entre el total real para evitar extremos
+  const ratio = (positiveWeight - negativeWeight) / (total + 4);
 
-  if (ratio <= -0.55) return 'MUY NEG ▼▼';
-  if (ratio <= -0.20) return 'NEGATIVO ▼';
-  if (ratio <= -0.05) return 'TENSO ↘';
-  if (ratio <   0.05) return 'NEUTRAL →';
-  if (ratio <   0.20) return 'ESTABLE ↗';
-  if (ratio <   0.55) return 'POSITIVO ▲';
+  if (ratio <= -0.45) return 'MUY NEG ▼▼';
+  if (ratio <= -0.18) return 'NEGATIVO ▼';
+  if (ratio <= -0.06) return 'TENSO ↘';
+  if (ratio <   0.06) return 'NEUTRAL →';
+  if (ratio <   0.18) return 'ESTABLE ↗';
+  if (ratio <   0.45) return 'POSITIVO ▲';
   return 'MUY POS ▲▲';
 }
 
@@ -1701,13 +1714,17 @@ function calculateTensionIndex(items = []) {
   const intensBonus = _INTENSIFIERS.some(i => text.includes(i)) ? 14 : 0;
 
   let score = 0;
-  critical.forEach(kw    => { if (text.includes(kw)) score += 22; });
-  highImpact.forEach(kw  => { if (text.includes(kw)) score += 13; });
-  mediumImpact.forEach(kw => { if (text.includes(kw)) score +=  7; });
+  critical.forEach(kw    => { if (_matchWord(text, kw)) score += 22; });
+  highImpact.forEach(kw  => { if (_matchWord(text, kw)) score += 13; });
+  mediumImpact.forEach(kw => { if (_matchWord(text, kw)) score +=  7; });
   score += intensBonus;
-  score += Math.min(items.length, 25) * 2; // volumen informativo
+  // Bonus de volumen moderado: máx +10 en lugar de +50
+  score += Math.min(items.length, 20) * 0.5;
+  // Normalizar por número de artículos para evitar que el volumen infle la tensión
+  const perArticle = score / Math.max(items.length, 1);
+  const normalized = Math.round((score * 0.6) + (perArticle * 0.4));
 
-  return Math.min(100, score);
+  return Math.min(100, normalized);
 }
 
 function getDefconLikeSignal(tensionIndex) {
