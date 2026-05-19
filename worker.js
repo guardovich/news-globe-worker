@@ -512,8 +512,8 @@ function mapD1Item(row) {
 }
 
 async function queryD1ByCountry(env, countryKey, query = "") {
-  // Artículos de las últimas 6 horas
-  const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  // Artículos de las últimas 48 horas (feeds con baja frecuencia cubiertos)
+  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
   const normalizedQ = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
@@ -539,10 +539,13 @@ async function queryD1ByCountry(env, countryKey, query = "") {
        ORDER BY pub_date DESC LIMIT 30`
     ).bind(countryKey, cutoff, `%"${matchedTopic}"%`).all();
   } else if (query) {
+    // Buscar con query original (con tildes) Y normalizado (sin tildes) para máxima cobertura
+    const origQ = query.trim().toLowerCase();
     result = await env.DB.prepare(
-      `SELECT * FROM articles WHERE country = ? AND fetched_at > ? AND (title LIKE ? OR summary LIKE ?)
+      `SELECT * FROM articles WHERE country = ? AND fetched_at > ?
+       AND (LOWER(title) LIKE ? OR LOWER(summary) LIKE ? OR LOWER(title) LIKE ? OR LOWER(summary) LIKE ?)
        ORDER BY pub_date DESC LIMIT 30`
-    ).bind(countryKey, cutoff, `%${normalizedQ}%`, `%${normalizedQ}%`).all();
+    ).bind(countryKey, cutoff, `%${normalizedQ}%`, `%${normalizedQ}%`, `%${origQ}%`, `%${origQ}%`).all();
   } else {
     result = await env.DB.prepare(
       `SELECT * FROM articles WHERE country = ? AND fetched_at > ?
