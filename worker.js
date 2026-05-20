@@ -210,7 +210,7 @@ function parseRssItems(xml = "", fallbackSource = "RSS") {
 async function fetchSingleFeed(feed) {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch(feed.url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; GeoNewsMonitor/2.1)" },
@@ -692,13 +692,15 @@ async function ingestAllFeeds(env) {
     allFeeds.push({ ...feed, country: "international" });
   }
 
-  // Procesar en lotes de 8 para no saturar la red
-  const BATCH = 8;
+  // Procesar en lotes de 12 con pequeña pausa entre lotes
+  const BATCH = 12;
   for (let i = 0; i < allFeeds.length; i += BATCH) {
     const batch = allFeeds.slice(i, i + BATCH);
     const results = await Promise.allSettled(
       batch.map((f) => fetchAndStore(f, env))
     );
+    // Pequeña pausa entre lotes para no saturar la red
+    if (i + BATCH < allFeeds.length) await new Promise(r => setTimeout(r, 200));
 
     for (const r of results) {
       if (r.status === "fulfilled") {

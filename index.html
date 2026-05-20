@@ -46,7 +46,7 @@
     .retro-ticker-bar {
       background: #020408;
       border-bottom: 1px solid var(--border);
-      height: 26px; display: flex; align-items: center; overflow: hidden;
+      height: 28px; display: flex; align-items: center; overflow: hidden;
     }
     .retro-ticker-label {
       flex-shrink: 0;
@@ -60,9 +60,10 @@
       display: flex; animation: scroll-left 50s linear infinite; white-space: nowrap;
     }
     .retro-ticker-item {
-      font-family: var(--mono); font-size: 30px; color: #86efac;
-      letter-spacing: 0.4px; padding: 0 28px;
-      border-right: 1px solid var(--border); display: inline-block;
+      font-family: 'Courier New', 'Lucida Console', monospace;
+      font-size: 12px; color: #ef4444; font-weight: 700;
+      letter-spacing: 1.2px; padding: 0 22px; text-transform: uppercase;
+      border-right: 1px solid rgba(239,68,68,.25); display: inline-block;
     }
     @keyframes scroll-left { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
@@ -288,7 +289,7 @@
       display: flex; align-items: center; gap: 6px;
     }
     #geoTicker { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
-    .ticker-item { font-size: 33px; color: #e2e8f0; line-height: 1.5; padding: 4px 0; border-bottom: 1px solid var(--border2); font-weight: 500; }
+    .ticker-item { font-size: 11px; color: #ef4444; font-family: 'Courier New', 'Lucida Console', monospace; line-height: 1.5; padding: 5px 0; border-bottom: 1px solid rgba(239,68,68,.15); font-weight: 600; letter-spacing: 0.3px; }
     .ticker-item:last-child { border-bottom: none; }
 
     /* ═══════════════════════════════════
@@ -1024,6 +1025,15 @@
 
     <!-- ── SIGNALS TAB ── -->
     <div class="tab-pane" id="tab-signals">
+
+      <!-- Signal Radar permanente -->
+      <div class="radar-wrap" id="signalRadarWrap">
+        <div class="radar-title">Signal Radar</div>
+        <div class="radar-box" id="signalRadarBox">
+          <div style="color:var(--muted);font-size:10px;padding:12px;font-family:var(--mono);">Lanza una búsqueda o briefing para activar el radar.</div>
+        </div>
+      </div>
+
       <div>
         <div class="panel-label">
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><polygon points="5,1 6.5,4 10,4.5 7.5,7 8,10 5,8.5 2,10 2.5,7 0,4.5 3.5,4"/></svg>
@@ -1036,9 +1046,9 @@
       <div class="geo-ticker-box">
         <div class="geo-ticker-label">
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1 5 Q2.5 1 5 5 Q7.5 9 9 5"/><circle cx="5" cy="5" r="1" fill="currentColor" stroke="none"/></svg>
-          Flujo en tiempo real
+          Live Feed — Flujo en tiempo real
         </div>
-        <div id="geoTicker" style="display:none"></div>
+        <div id="geoTicker"></div>
         <div id="geoTickerSignals" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;"></div>
       </div>
     </div>

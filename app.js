@@ -1282,31 +1282,63 @@ function _globeFlyTo(lon, lat) {
 /* =========================
    RENDER NOTICIAS
 ========================= */
+// Paginación de resultados: 10 por página, botón "Ver más"
+let _allResults = [];
+let _resultsPage = 0;
+const RESULTS_PER_PAGE = 10;
+
+function renderResultsPage() {
+  const start = _resultsPage * RESULTS_PER_PAGE;
+  const slice = _allResults.slice(start, start + RESULTS_PER_PAGE);
+
+  for (const item of slice) {
+    const title  = item.title  || "Sin título";
+    const link   = item.link   || "#";
+    const source = item.source || "Fuente desconocida";
+    const pubDate= item.pubDate|| "";
+    const summary= item.summary|| "";
+    const card = document.createElement("article");
+    card.className = "card";
+    card.innerHTML = `
+      <h3><a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a></h3>
+      <div class="meta">${escapeHtml(source)}${pubDate ? " · " + escapeHtml(pubDate) : ""}</div>
+      ${summary ? `<div class="summary">${escapeHtml(summary)}</div>` : ""}
+    `;
+    resultsEl.appendChild(card);
+  }
+
+  // Remove previous "load more" button if any
+  const oldBtn = document.getElementById("loadMoreBtn");
+  if (oldBtn) oldBtn.remove();
+
+  const shown = (_resultsPage + 1) * RESULTS_PER_PAGE;
+  if (shown < _allResults.length) {
+    const remaining = _allResults.length - shown;
+    const btn = document.createElement("button");
+    btn.id = "loadMoreBtn";
+    btn.style.cssText = "width:100%;margin-top:8px;padding:10px;background:rgba(59,130,246,.12);border:1px solid var(--accent);border-radius:6px;color:#93c5fd;font-size:11px;font-family:var(--mono);cursor:pointer;letter-spacing:.5px;";
+    btn.textContent = `▼ VER MÁS — ${remaining} noticias restantes`;
+    btn.onclick = () => { _resultsPage++; renderResultsPage(); };
+    resultsEl.appendChild(btn);
+  } else if (_allResults.length > RESULTS_PER_PAGE) {
+    const info = document.createElement("div");
+    info.style.cssText = "text-align:center;padding:8px;font-size:10px;color:var(--muted);font-family:var(--mono);";
+    info.textContent = `— ${_allResults.length} noticias mostradas —`;
+    resultsEl.appendChild(info);
+  }
+}
+
 function renderResults(items = []) {
   resultsEl.innerHTML = "";
+  _allResults = items;
+  _resultsPage = 0;
 
   if (!items.length) {
     resultsEl.innerHTML = `<div class="card"><div class="summary">Sin resultados.</div></div>`;
     return;
   }
 
-  for (const item of items) {
-    const title = item.title || "Sin título";
-    const link = item.link || "#";
-    const source = item.source || "Fuente desconocida";
-    const pubDate = item.pubDate || "";
-    const summary = item.summary || "";
-
-    const card = document.createElement("article");
-    card.className = "card";
-    card.innerHTML = `
-      <h3><a href="${link}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a></h3>
-      <div class="meta">${escapeHtml(source)}${pubDate ? " · " + escapeHtml(pubDate) : ""}</div>
-      <div class="summary">${escapeHtml(summary)}</div>
-    `;
-
-    resultsEl.appendChild(card);
-  }
+  renderResultsPage();
 }
 
 /* =========================
@@ -1429,7 +1461,12 @@ function inferCountryAnalysis(country, items, topic) {
   const tensionLabel = tension >= 60 ? `, índice de tensión alto (${tension}/100)` :
                        tension >= 35 ? `, tensión moderada (${tension}/100)` : '';
 
-  return `En ${country}, el tema "${topic}" aparece con ${angle}, un ${tone} y énfasis en ${emphasis}. ${moodLabel.charAt(0).toUpperCase() + moodLabel.slice(1)}${tensionLabel}.`;
+  const bias = detectSourceBias(items);
+  const biasNote = bias ? ` · ⚠ ${bias}` : "";
+  const sourceDiv = [...new Set(items.map(i => i.source).filter(Boolean))].slice(0, 3).join(", ");
+  const sourceLine = sourceDiv ? ` Fuentes: ${sourceDiv}.` : "";
+
+  return `En ${country}, el tema "${topic}" aparece con ${angle}, un ${tone} y énfasis en ${emphasis}. ${moodLabel.charAt(0).toUpperCase() + moodLabel.slice(1)}${tensionLabel}.${sourceLine}${biasNote}`;
 }
 
 function buildStructuredBriefing(topic, groups) {
@@ -1746,6 +1783,12 @@ function renderBriefing(groups = [], analysis = null) {
   const radarSvg = buildRadarSVG(radarScores);
   const radarLegend = buildRadarLegend(radarScores);
 
+  // Actualizar radar permanente en pestaña Signals
+  const signalRadarBox = document.getElementById("signalRadarBox");
+  if (signalRadarBox) {
+    signalRadarBox.innerHTML = `${radarSvg}<div class="radar-meta">${radarLegend}</div>`;
+  }
+
   if (analysis) {
     const analysisCard = document.createElement("article");
     analysisCard.className = "card";
@@ -1836,44 +1879,77 @@ function renderBriefing(groups = [], analysis = null) {
    SENTIMIENTO Y RIESGO
 ========================= */
 /* ── Intensificadores y patrones de negación ── */
+/* ══════════════════════════════════════
+   MOTOR DE SENTIMIENTO v3 — PULIDO MÁXIMO
+══════════════════════════════════════ */
+
+// Fuentes de alta credibilidad (peso 1.5×), estado (0.7×), resto 1.0×
+const _SOURCE_WEIGHTS = {
+  tier1: ["reuters","ap news","associated press","bbc","nyt","new york times","washington post",
+          "the guardian","financial times","the economist","foreign affairs","foreign policy",
+          "el país","el tiempo","semana","le monde"],
+  state: ["cgtn","xinhua","china daily","global times","press tv","irna","tass","rt ","russia today",
+          "presstv","trt world","daily sabah"],
+};
+
+function _getSourceWeight(source = "") {
+  const s = source.toLowerCase();
+  if (_SOURCE_WEIGHTS.tier1.some(t => s.includes(t))) return 1.5;
+  if (_SOURCE_WEIGHTS.state.some(t => s.includes(t))) return 0.7;
+  return 1.0;
+}
+
+// Recencia: artículos <3h = 1.3×, <12h = 1.0×, más antiguos = 0.8×
+function _getRecencyWeight(pubDate = "") {
+  if (!pubDate) return 1.0;
+  try {
+    const ageMs = Date.now() - new Date(pubDate).getTime();
+    if (ageMs < 3 * 3600 * 1000)  return 1.3;
+    if (ageMs < 12 * 3600 * 1000) return 1.0;
+    return 0.8;
+  } catch { return 1.0; }
+}
+
 const _INTENSIFIERS = [
-  // ES — magnitud
-  "extremadamente", "devastador", "catastrófico", "catastrófica",
+  // ES — magnitud crítica
+  "extremadamente", "devastador", "devastadora", "catastrófico", "catastrófica",
   "masivo", "masiva", "masivos", "masivas",
-  "crítico", "crítica", "grave", "graves",
-  "severo", "severa", "severos", "severas",
-  "urgente", "urgentes", "alarmante", "alarmantes",
-  "brutal", "brutales", "violento", "violenta",
-  "sin precedentes", "histórico sin precedentes",
-  "total", "absoluto", "absoluta",
-  "extremo", "extrema", "profundo", "agudo", "aguda",
-  "caótico", "caótica", "dramático", "dramática",
-  "repentino", "repentina", "fulminante",
+  "crítico", "crítica", "críticos", "críticas",
+  "grave", "graves", "gravísimo", "gravísima",
+  "severo", "severa", "urgente", "urgentes",
+  "alarmante", "alarmantes", "brutal", "brutales",
+  "violento", "violenta", "violentos", "violentas",
+  "sin precedentes", "total", "absoluto", "absoluta",
+  "extremo", "extrema", "profundo", "profunda",
+  "agudo", "aguda", "caótico", "caótica",
+  "dramático", "dramática", "repentino", "repentina",
+  "fulminante", "generalizado", "generalizada",
+  "devastación", "colapso", "ruptura", "estallido",
   // EN — magnitude
   "devastating", "catastrophic", "massive", "critical",
   "severe", "urgent", "alarming", "brutal", "violent",
-  "unprecedented", "total", "absolute",
-  "extreme", "profound", "acute", "chaotic",
-  "dramatic", "sudden", "sweeping", "overwhelming",
-  "dire", "grave", "serious", "deadly", "fatal",
-  "worst", "historic crisis"
+  "unprecedented", "total", "absolute", "extreme",
+  "profound", "acute", "chaotic", "dramatic",
+  "sudden", "sweeping", "overwhelming", "dire",
+  "grave", "deadly", "fatal", "worst ever",
+  "historic crisis", "meltdown", "collapse", "breakdown",
+  "escalation", "explosive", "volatile"
 ];
 
 const _NEGATIONS = [
   "no ", "sin ", "nunca ", "jamás ", "never ", "without ", "not ",
-  "fails to", "fracasa", "rechaza", "niega", "descarta", "evita", "excluye"
+  "fails to", "no hay", "no se", "sin que",
+  "fracasa", "rechaza", "niega", "descarta", "evita", "excluye",
+  "descartado", "rechazado", "negado", "ningún", "ninguna"
 ];
 
-/* Comprueba si 'word' aparece como palabra completa en 'text' */
+/* Matching robusto: palabra completa, insensible a mayúsculas */
 function _matchWord(text, word) {
-  // Para palabras cortas (<=3 chars) o con espacios usamos includes directo
   if (word.length <= 2 || word.includes(" ")) return text.includes(word);
-  // Para el resto usamos regex con límite de palabra (funciona bien en ASCII)
   try {
-    return new RegExp("(?<![a-záéíóúüñ])" + word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-záéíóúüñ])", "i").test(text);
-  } catch {
-    return text.includes(word);
-  }
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp("(?<![a-záéíóúüñàèìòùâêîôûäëïöüç])" + escaped + "(?![a-záéíóúüñàèìòùâêîôûäëïöüç])", "i").test(text);
+  } catch { return text.includes(word); }
 }
 
 function _hasNearContext(text, word, patterns) {
@@ -1883,34 +1959,52 @@ function _hasNearContext(text, word, patterns) {
   return patterns.some(p => before.includes(p));
 }
 
+/* Normaliza texto eliminando tildes para búsqueda robusta */
+function _normText(t = "") {
+  return t.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
 function scoreSentiment(items = []) {
   let positiveWeight = 0;
   let negativeWeight = 0;
 
   items.forEach(item => {
-    const title   = (item.title   || '').toLowerCase();
-    const summary = (item.summary || '').toLowerCase();
+    const sourceW  = _getSourceWeight(item.source || "");
+    const recencyW = _getRecencyWeight(item.pubDate || "");
+    const itemMult = sourceW * recencyW;
 
-    const scoreText = (text, titleWeight) => {
-      const intensified = _INTENSIFIERS.some(i => text.includes(i));
-      const mult = intensified ? 1.35 : 1.0;
+    const rawTitle   = (item.title   || "").toLowerCase();
+    const rawSummary = (item.summary || "").toLowerCase();
+    const normTitle   = _normText(item.title   || "");
+    const normSummary = _normText(item.summary || "");
+
+    const scoreText = (raw, norm, titleWeight) => {
+      const intensified = _INTENSIFIERS.some(i => raw.includes(i) || norm.includes(i));
+      const mult = (intensified ? 1.4 : 1.0) * itemMult;
 
       positiveKeywords.forEach(word => {
-        if (_matchWord(text, word)) {
-          const neg = _hasNearContext(text, word, _NEGATIONS) ? -0.4 : 1;
-          positiveWeight += titleWeight * mult * neg;
+        const nw = _normText(word);
+        const hit = _matchWord(raw, word) || _matchWord(norm, nw);
+        if (hit) {
+          const negCtx = _hasNearContext(raw, word, _NEGATIONS) || _hasNearContext(norm, nw, _NEGATIONS);
+          positiveWeight += titleWeight * mult * (negCtx ? -0.3 : 1);
         }
       });
+
       negativeKeywords.forEach(word => {
-        if (_matchWord(text, word)) {
-          const neg = _hasNearContext(text, word, _NEGATIONS) ? -0.4 : 1;
-          negativeWeight += titleWeight * mult * neg;
+        const nw = _normText(word);
+        const hit = _matchWord(raw, word) || _matchWord(norm, nw);
+        if (hit) {
+          const negCtx = _hasNearContext(raw, word, _NEGATIONS) || _hasNearContext(norm, nw, _NEGATIONS);
+          negativeWeight += titleWeight * mult * (negCtx ? -0.3 : 1);
         }
       });
     };
 
-    scoreText(title, 3);    // títulos pesan 3×
-    scoreText(summary, 1);  // sumarios pesan 1×
+    scoreText(rawTitle,   normTitle,   3.0);  // título pesa 3×
+    scoreText(rawSummary, normSummary, 1.0);  // sumario pesa 1×
   });
 
   const pW = Math.max(0, positiveWeight);
@@ -1918,65 +2012,87 @@ function scoreSentiment(items = []) {
   return { positive: pW, negative: nW, positiveWeight: pW, negativeWeight: nW, score: pW - nW };
 }
 
+/* Confianza del análisis: más artículos y mayor señal → más confianza */
+function _sentimentConfidence(items, total) {
+  if (!items.length) return "";
+  if (total < 0.5) return " (señal débil)";
+  if (items.length < 3) return " (muestra pequeña)";
+  return "";
+}
+
 function detectMediaMood(items = []) {
-  if (!items.length) return 'NEUTRAL';
+  if (!items.length) return "NEUTRAL";
   const { positiveWeight, negativeWeight } = scoreSentiment(items);
   const total = positiveWeight + negativeWeight;
-  if (total === 0) return 'SIN DATOS';
-  if (total < 1.0) return 'NEUTRAL →';
-  // Normalización suavizada: divide entre el total real para evitar extremos
-  const ratio = (positiveWeight - negativeWeight) / (total + 4);
+  if (total === 0) return "SIN DATOS";
+  if (total < 0.8) return "NEUTRAL →";
 
-  if (ratio <= -0.45) return 'MUY NEG ▼▼';
-  if (ratio <= -0.18) return 'NEGATIVO ▼';
-  if (ratio <= -0.06) return 'TENSO ↘';
-  if (ratio <   0.06) return 'NEUTRAL →';
-  if (ratio <   0.18) return 'ESTABLE ↗';
-  if (ratio <   0.45) return 'POSITIVO ▲';
-  return 'MUY POS ▲▲';
+  // Suavizado: +6 en denominador evita extremos con pocos artículos
+  const ratio = (positiveWeight - negativeWeight) / (total + 6);
+  const conf  = _sentimentConfidence(items, total);
+
+  if (ratio <= -0.50) return "MUY NEG ▼▼" + conf;
+  if (ratio <= -0.20) return "NEGATIVO ▼" + conf;
+  if (ratio <= -0.07) return "TENSO ↘"   + conf;
+  if (ratio <   0.07) return "NEUTRAL →"  + conf;
+  if (ratio <   0.20) return "ESTABLE ↗"  + conf;
+  if (ratio <   0.50) return "POSITIVO ▲" + conf;
+  return "MUY POS ▲▲" + conf;
+}
+
+/* Detecta si hay sesgo de fuentes estatales */
+function detectSourceBias(items = []) {
+  const stateFeeds = _SOURCE_WEIGHTS.state;
+  const stateCount = items.filter(i =>
+    stateFeeds.some(s => (i.source || "").toLowerCase().includes(s))
+  ).length;
+  if (stateCount >= 2 && stateCount / Math.max(items.length, 1) > 0.4) {
+    return "SESGO OFICIAL";
+  }
+  return null;
 }
 
 function calculateTensionIndex(items = []) {
   if (!items.length) return 0;
 
-  const text = items
-    .map(item => `${item.title || ""} ${item.summary || ""}`)
-    .join(" ")
-    .toLowerCase();
-
-  // Nivel crítico: 22 pts
+  // Nivel crítico: +22 pts/artículo
   const critical = [
     "guerra", "war", "invasion", "invasión", "nuclear", "bombardeo", "bombing",
     "coup", "golpe de estado", "casualties", "muertos en combate", "terrorism",
     "terrorismo", "cyberattack", "ciberataque", "masacre", "massacre",
-    "misil nuclear", "arma química", "genocide", "genocidio", "colapso estatal"
+    "arma quimica", "arma química", "genocide", "genocidio", "colapso estatal",
+    "chemical weapon", "biological weapon", "dirty bomb", "arma biologica"
   ];
-  // Nivel alto: 13 pts
+  // Nivel alto: +13 pts/artículo
   const highImpact = [
     "ataque", "attack", "misil", "missile", "drone", "dron", "explosion",
-    "crisis", "sanciones severas", "escalada", "escalation", "ultimatum",
-    "standoff", "confrontacion", "guerra civil", "civil war", "guerrilla",
-    "operación militar", "military operation", "muertos", "killed"
+    "crisis", "escalada", "escalation", "ultimatum", "standoff",
+    "guerra civil", "civil war", "guerrilla", "operacion militar", "military operation",
+    "muertos", "killed", "airstrikes", "ofensiva", "offensive",
+    "emergency", "emergencia", "estado de excepcion", "martial law",
+    "sankciones severas", "severe sanctions", "refugees fleeing", "desplazados"
   ];
-  // Nivel medio: los tensionKeywords restantes, 7 pts
+  // Nivel medio: resto de tensionKeywords
   const mediumImpact = tensionKeywords.filter(
     kw => !critical.includes(kw) && !highImpact.includes(kw)
   );
 
-  // Bonus por intensificadores: escalable, máx +15
-  const intensCount = _INTENSIFIERS.filter(i => text.includes(i)).length;
-  const intensBonus = Math.min(intensCount * 3, 15);
+  // Bonus por intensificadores
+  const allText = items.map(i => `${i.title||""} ${i.summary||""}`).join(" ").toLowerCase();
+  const intensCount = _INTENSIFIERS.filter(i => allText.includes(i)).length;
+  const intensBonus = Math.min(intensCount * 2.5, 15);
 
-  let score = 0;
-  // Scoring por artículo con cap individual para evitar saturación
+  // Scoring por artículo con peso de fuente y cap 32pts
   let totalScore = 0;
   items.forEach(item => {
-    const t = `${item.title || ""} ${item.summary || ""}`.toLowerCase();
+    const t = _normText(`${item.title||""} ${item.summary||""}`);
+    const raw = `${item.title||""} ${item.summary||""}`.toLowerCase();
+    const sourceW = _getSourceWeight(item.source || "");
     let s = 0;
-    critical.forEach(kw    => { if (_matchWord(t, kw)) s += 22; });
-    highImpact.forEach(kw  => { if (_matchWord(t, kw)) s += 13; });
-    mediumImpact.forEach(kw => { if (_matchWord(t, kw)) s +=  7; });
-    totalScore += Math.min(s, 30); // Cap por artículo
+    critical.forEach(kw    => { if (_matchWord(raw, kw) || _matchWord(t, _normText(kw))) s += 22; });
+    highImpact.forEach(kw  => { if (_matchWord(raw, kw) || _matchWord(t, _normText(kw))) s += 13; });
+    mediumImpact.forEach(kw => { if (_matchWord(raw, kw) || _matchWord(t, _normText(kw))) s +=  7; });
+    totalScore += Math.min(s * sourceW, 32);
   });
 
   const avg = totalScore / Math.max(items.length, 1);
