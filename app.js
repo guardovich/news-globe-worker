@@ -1504,17 +1504,62 @@ function buildStructuredBriefing(topic, groups) {
   const mostCommonTheme =
     Object.entries(themeFrequency).sort((a, b) => b[1] - a[1])[0]?.[0] || "general";
 
-  const executiveSummary = `El briefing sobre "${topic}" indica que la cobertura se concentra principalmente en un marco ${mostCommonTheme}. La muestra combina ${validGroups.length} países con enfoques distintos, aunque aparece una dimensión internacional compartida.`;
+  // Recopilar titulares reales de todos los países
+  const allItems = validGroups.flatMap(g => g.items || []);
+  const totalHeadlines = allItems.length;
+  const allSources = [...new Set(allItems.map(i => i.source).filter(Boolean))];
 
-  const commonPatterns = `Se observan patrones comunes en la forma de tratar "${topic}": varios países lo conectan con implicaciones políticas, efectos sociales y proyección internacional. El volumen agregado de titulares sugiere que no se trata de una cuestión aislada, sino de un asunto con múltiples capas.`;
+  // Top 3 titulares más impactantes para el resumen ejecutivo
+  function _topItems(items, n) {
+    return [...items].sort((a, b) => {
+      const score = item => {
+        const t = (item.title || "").toLowerCase();
+        let s = 0;
+        tensionKeywords.forEach(kw => { if (t.includes(kw)) s += 2; });
+        negativeKeywords.forEach(kw => { if (t.includes(kw)) s += 1.5; });
+        _INTENSIFIERS.forEach(k => { if (t.includes(k)) s += 1; });
+        return s;
+      };
+      return score(b) - score(a);
+    }).slice(0, n);
+  }
 
-  const differencesText = analyses
-    .map((a) => `${a.country}: predominio ${a.dominantTheme}`)
+  const topHeadlines = _topItems(allItems, 3);
+  const quotedHeadlines = topHeadlines
+    .map(i => `"${i.title}" (${i.source || "fuente desconocida"})`)
     .join("; ");
 
-  const geopoliticalReading = `La comparación sugiere que "${topic}" no se interpreta igual en todos los contextos nacionales. Algunos medios lo presentan desde marcos institucionales o regulatorios, mientras otros lo empujan hacia la seguridad, la economía o la tecnología. Esto apunta a agendas nacionales diferentes y a prioridades geopolíticas distintas según el país.`;
+  const overallMood  = detectMediaMood(allItems);
+  const overallTension = calculateTensionIndex(allItems);
+  const tensionDesc = overallTension >= 60 ? "alta tensión" :
+                      overallTension >= 35 ? "tensión moderada" : "tensión baja";
 
-  const risks = `Si la cobertura sigue evolucionando en esta línea, los principales escenarios pasan por una mayor politización del tema, más fricción regulatoria entre bloques y una posible intensificación del enfoque estratégico en los países que lo vinculan con seguridad o competencia internacional.`;
+  const executiveSummary = `Análisis de ${totalHeadlines} titulares sobre "${topic}" en ${validGroups.length} país${validGroups.length > 1 ? "es" : ""} (${allSources.slice(0,5).join(", ")}${allSources.length > 5 ? "…" : ""}). Valoración media: ${overallMood} · ${tensionDesc} (${overallTension}/100). Entre los titulares más destacados: ${quotedHeadlines || "sin titulares de alto impacto"}.`;
+
+  const differencesText = analyses
+    .map((a) => {
+      const g = validGroups.find(g => g.country === a.country);
+      const mood = g ? detectMediaMood(g.items) : "—";
+      const t    = g ? calculateTensionIndex(g.items) : 0;
+      return `${a.country}: ${mood} (tensión ${t}/100)`;
+    })
+    .join(" · ");
+
+  // Patrones comunes: temas que aparecen en más de la mitad de los países
+  const themeNames = { institucional:"institucional", economico:"económico", seguridad:"seguridad", regulatorio:"regulatorio", social:"social", tecnologico:"tecnológico" };
+  const sharedThemes = Object.entries(themeFrequency)
+    .filter(([, n]) => n >= Math.ceil(validGroups.length / 2))
+    .map(([k]) => themeNames[k] || k);
+
+  const commonPatterns = sharedThemes.length
+    ? `Todos o la mayoría de los países analizados coinciden en enmarcar "${topic}" en clave ${sharedThemes.join(", ")}. El volumen y tono de cobertura sugiere un seguimiento activo y coordinado del tema a nivel internacional.`
+    : `No se detecta un patrón temático dominante compartido. Cada país aborda "${topic}" desde ángulos distintos, lo que indica interpretaciones nacionales divergentes o agendas mediáticas diferenciadas.`;
+
+  const geopoliticalReading = `La comparación cruzada de ${validGroups.length} fuentes nacionales revela que "${topic}" genera narrativas diferenciadas según el bloque geopolítico. Los países con mayor tensión registrada pueden estar respondiendo a presiones internas o externas específicas. La dispersión de enfoques —de lo institucional a lo de seguridad— señala que el tema tiene implicaciones en múltiples tableros simultáneamente.`;
+
+  const risks = overallTension >= 50
+    ? `Riesgo elevado (${overallTension}/100): la cobertura combinada apunta a una posible escalada. Escenarios probables: aumento de medidas unilaterales, mayor presión diplomática y cobertura mediática amplificada. Monitorizar fuentes primarias.`
+    : `Riesgo moderado-bajo (${overallTension}/100). El tema se mantiene en la agenda pero sin señales de escalada inmediata. Escenarios: mantenimiento del statu quo con posibles ajustes regulatorios o declaraciones institucionales.`;
 
   return {
     executiveSummary,
@@ -1845,30 +1890,117 @@ function renderBriefing(groups = [], analysis = null) {
     briefingResultsEl.appendChild(comparisonCard);
   }
 
+  // ── Resumen de prensa por país: citas textuales atribuidas ──
   groups.forEach((group) => {
+    const items = group.items || [];
+    if (!items.length) return;
+
     const card = document.createElement("article");
     card.className = "card";
 
-    const itemsHtml = (group.items || [])
-      .slice(0, 5)
-      .map((item) => {
-        const title = item.title || "Sin título";
-        const link = item.link || "#";
-        const source = item.source || "Google News";
+    const mood      = detectMediaMood(items);
+    const tension   = calculateTensionIndex(items);
+    const bias      = detectSourceBias(items);
+    const sources   = [...new Set(items.map(i => i.source).filter(Boolean))];
+    const stateSet  = new Set(_SOURCE_WEIGHTS.state);
 
-        return `
-          <div class="brief-item">
-            <a href="${link}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a>
-            <div class="meta">${escapeHtml(source)}</div>
+    // Clasificar artículos por impacto emocional para elegir citas representativas
+    function _scoreItem(item) {
+      const t = (item.title || "").toLowerCase();
+      let s = 0;
+      tensionKeywords.forEach(kw => { if (t.includes(kw)) s += 2; });
+      negativeKeywords.forEach(kw => { if (_matchWord(t, kw)) s += 1.5; });
+      positiveKeywords.forEach(kw => { if (_matchWord(t, kw)) s += 1; });
+      _INTENSIFIERS.forEach(i => { if (t.includes(i)) s += 1; });
+      return s;
+    }
+
+    // Seleccionar hasta 6 artículos más representativos
+    const sorted = [...items].sort((a,b) => _scoreItem(b) - _scoreItem(a)).slice(0, 6);
+
+    function _quoteClass(item) {
+      const t = (item.title || "").toLowerCase();
+      const hasNeg = negativeKeywords.some(kw => _matchWord(t, kw));
+      const hasPos = positiveKeywords.some(kw => _matchWord(t, kw));
+      const hasTen = tensionKeywords.some(kw => t.includes(kw));
+      if (hasTen || (hasNeg && !hasPos)) return "negative";
+      if (hasPos && !hasNeg) return "positive";
+      if (hasNeg) return "tension";
+      return "";
+    }
+
+    function _formatDate(pubDate) {
+      if (!pubDate) return "";
+      try {
+        const d = new Date(pubDate);
+        return d.toLocaleDateString("es-ES", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
+      } catch { return pubDate.slice(0, 16); }
+    }
+
+    function _isState(source) {
+      return stateSet.some(s => (source||"").toLowerCase().includes(s));
+    }
+
+    const quotesHtml = sorted.map(item => {
+      const title   = item.title   || "Sin título";
+      const link    = item.link    || "#";
+      const source  = item.source  || "Fuente desconocida";
+      const excerpt = (item.summary || "").slice(0, 180).trim();
+      const date    = _formatDate(item.pubDate);
+      const cls     = _quoteClass(item);
+      const badgeCls= _isState(source) ? "state" : "";
+
+      return `
+        <div class="press-quote ${cls}">
+          <a class="press-quote-headline" href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer">
+            "${escapeHtml(title)}"
+          </a>
+          ${excerpt ? `<div class="press-quote-excerpt">${escapeHtml(excerpt)}${excerpt.length >= 180 ? "…" : ""}</div>` : ""}
+          <div class="press-quote-attribution">
+            <span class="press-source-badge ${badgeCls}">${escapeHtml(source)}</span>
+            ${date ? `<span>${date}</span>` : ""}
+            ${badgeCls === "state" ? `<span style="color:var(--amber);font-size:8.5px;">⚠ medio oficial</span>` : ""}
           </div>
-        `;
-      })
-      .join("");
+        </div>`;
+    }).join("");
+
+    // Métricas rápidas del país
+    const moodColor = mood.includes("NEG") || mood.includes("TENS") ? "#ef4444" :
+                      mood.includes("POS") || mood.includes("EST")  ? "#22d3a0" : "var(--muted)";
+    const defcon = getDefconLikeSignal(tension);
+    const defconColor = { RED:"#ef4444", ORANGE:"#f59e0b", YELLOW:"#eab308", BLUE:"#60a5fa", GREEN:"#22d3a0" }[defcon];
 
     card.innerHTML = `
-      <h3>${escapeHtml(group.country)}</h3>
-      <div class="summary">${escapeHtml(group.analysis)}</div>
-      <div class="brief-list">${itemsHtml || '<div class="summary">Sin titulares suficientes.</div>'}</div>
+      <div class="press-country-header">
+        <h3 style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px;">
+          <span style="font-size:18px;">${group.flag || ""}</span>
+          ${escapeHtml(group.country)}
+          <span style="font-size:9px;font-family:var(--mono);color:var(--muted);font-weight:400;">${items.length} fuentes</span>
+        </h3>
+        <div class="press-country-stats">
+          <div class="press-stat">
+            <span class="press-stat-val" style="color:${moodColor}">${mood.split(" ")[0]}</span>
+            <span class="press-stat-label">Mood</span>
+          </div>
+          <div class="press-stat">
+            <span class="press-stat-val" style="color:${defconColor}">${tension}</span>
+            <span class="press-stat-label">Tensión</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="press-analysis">${escapeHtml(group.analysis)}</div>
+
+      <div class="press-section-label">Titulares seleccionados</div>
+      <div class="press-quote-block">${quotesHtml || '<div class="summary" style="color:var(--muted)">Sin titulares para este país.</div>'}</div>
+
+      ${sources.length > 1 ? `
+        <div class="press-section-label" style="margin-top:14px;">Medios consultados</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:0;">
+          ${sources.map(s => `<span class="press-source-badge ${_isState(s) ? "state" : ""}">${escapeHtml(s)}</span>`).join("")}
+        </div>` : ""}
+
+      ${bias ? `<div style="margin-top:8px;font-size:10px;color:var(--amber);font-family:var(--mono);">⚠ ${bias}</div>` : ""}
     `;
 
     briefingResultsEl.appendChild(card);
@@ -2403,7 +2535,8 @@ async function generateBriefing() {
         country: place.name,
         analysis: inferCountryAnalysis(place.name, items, topic),
         items,
-        place
+        place,
+        flag: place.gl ? `<span class="fi fi-${place.gl.toLowerCase()}"></span>` : ""
       });
 
       if (items.length) {
