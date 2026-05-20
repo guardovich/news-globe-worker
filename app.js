@@ -1329,6 +1329,10 @@ function renderResultsPage() {
 }
 
 function renderResults(items = []) {
+  // Swap visibility: show #results, hide #briefingResults
+  resultsEl.style.display = "";          // restores CSS default (grid)
+  briefingResultsEl.style.display = "none";
+
   resultsEl.innerHTML = "";
   _allResults = items;
   _resultsPage = 0;
@@ -1817,6 +1821,10 @@ function renderCountryRadarCard(group) {
    RENDER BRIEFING
 ========================= */
 function renderBriefing(groups = [], analysis = null) {
+  // Swap visibility: show #briefingResults, hide #results
+  briefingResultsEl.style.display = "flex";
+  resultsEl.style.display = "none";
+
   briefingResultsEl.innerHTML = "";
 
   if (!groups.length) {
@@ -2604,6 +2612,9 @@ async function generateBriefing() {
 ========================= */
 function clearBriefing() {
   briefTopicInput.value = "";
+  // Restore search panel, hide briefing
+  briefingResultsEl.style.display = "none";
+  resultsEl.style.display = "";
   briefingResultsEl.innerHTML = `
     <div class="card">
       <div class="summary">Todavía no se ha generado ningún briefing.</div>

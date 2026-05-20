@@ -1368,14 +1368,7 @@
     });
   }, 1000);
 
-  /* ── Watch results so briefing/search don't overlap ── */
-  new MutationObserver(() => {
-    const r = document.getElementById('results');
-    if (r && r.children.length) {
-      r.style.display = 'grid';
-      document.getElementById('briefingResults').style.display = 'none';
-    }
-  }).observe(document.getElementById('results'), { childList: true });
+  /* visibility managed by renderResults / renderBriefing in app.js */
 
   /* ── Mirror geo ticker to signals tab ── */
   new MutationObserver(() => {
